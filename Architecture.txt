@@ -1,0 +1,18 @@
+flowlm/
+│
+├── backend/
+│   ├── app/
+│   │   ├── api/            ← routes
+│   │   ├── core/           ← config, settings
+│   │   ├── models/         ← DB models
+│   │   ├── schemas/        ← request/response
+│   │   ├── services/       ← business logic
+│   │   ├── repositories/   ← DB access
+│   │   ├── llm/            ← model abstraction
+│   │   ├── evaluation/     ← eval engine
+│   │   └── main.py
+│
+├── frontend/
+│
+├── docker-compose.yml
+├── README.md
