@@ -15,3 +15,8 @@ node_modules/
 # OS
 .DS_Store
 Thumbs.db
+
+# Extras
+Z-Future_Changes.md
+Database_designs.md
+Architecture.txt
