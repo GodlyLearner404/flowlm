@@ -6,4 +6,3 @@ alembic
 python-dotenv
 pydantic-settings
 sentence-transformers
-python-multipart
