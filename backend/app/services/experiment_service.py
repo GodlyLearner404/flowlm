@@ -1,0 +1,77 @@
+from sqlalchemy.orm import Session
+from app.models.experiment import Experiment
+from app.models.dataset_item import DatasetItem
+from app.models.prompt_version import PromptVersion
+from app.models.run import Run
+from app.services.execution_service import ExecutionService
+from app.evaluation.simple_evaluator import SimpleEvaluator
+
+import uuid
+from datetime import datetime
+
+
+class ExperimentService:
+
+    @staticmethod
+    def run_experiment(db: Session, prompt_version_id: str, dataset_id: str):
+        # create experiment
+        experiment = Experiment(
+            id=str(uuid.uuid4()),
+            prompt_version_id=prompt_version_id,
+            dataset_id=dataset_id,
+            status="running",
+            created_at=datetime.utcnow()
+        )
+
+        db.add(experiment)
+        db.commit()
+        db.refresh(experiment)
+
+        # fetch data
+        prompt_version = db.query(PromptVersion).filter(
+            PromptVersion.id == prompt_version_id
+        ).first()
+
+        dataset_items = db.query(DatasetItem).filter(
+            DatasetItem.dataset_id == dataset_id
+        ).all()
+
+        results = []
+
+        for item in dataset_items:
+            # run LLM
+            final_prompt, output = ExecutionService.run(prompt_version, item.input)
+
+            # score
+            score = SimpleEvaluator.score(output, item.expected_output)
+
+            # save run
+            run = Run(
+                id=str(uuid.uuid4()),
+                experiment_id=experiment.id,
+                dataset_item_id=item.id,
+                input=item.input,
+                output=output,
+                score=score,
+                latency_ms=None,
+                extra_data={},
+                created_at=datetime.utcnow()
+            )
+
+            db.add(run)
+            db.commit()
+
+            results.append({
+                "input": item.input,
+                "output": output,
+                "score": score
+            })
+
+        # mark complete
+        experiment.status = "completed"
+        db.commit()
+
+        return {
+            "experiment_id": experiment.id,
+            "results": results
+        }
