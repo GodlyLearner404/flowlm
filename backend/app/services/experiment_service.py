@@ -6,6 +6,7 @@ from app.models.prompt_version import PromptVersion
 from app.models.run import Run
 from app.services.execution_service import ExecutionService
 from app.evaluation.simple_evaluator import SimpleEvaluator
+from app.evaluation.llm_evaluator import LLMEvaluator
 
 import uuid
 from datetime import datetime
@@ -45,6 +46,7 @@ class ExperimentService:
 
             # score = 1
             score = SimpleEvaluator.score(output, item.expected_output)
+            # score = LLMEvaluator.score(output, item.expected_output) # Slows
 
             # save run
             run = Run(
@@ -105,6 +107,7 @@ class ExperimentService:
 
                 # score = 1
                 score = SimpleEvaluator.score(output, item.expected_output)
+                # score = LLMEvaluator.score(output, item.expected_output) # Slows
 
                 run = Run(
                     id=str(uuid.uuid4()),
