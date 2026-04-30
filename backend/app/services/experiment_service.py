@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from app.core.database import SessionLocal
 from app.models.experiment import Experiment
 from app.models.dataset_item import DatasetItem
 from app.models.prompt_version import PromptVersion
@@ -42,7 +43,7 @@ class ExperimentService:
             # run LLM
             final_prompt, output = ExecutionService.run(prompt_version, item.input)
 
-            # score
+            # score = 1
             score = SimpleEvaluator.score(output, item.expected_output)
 
             # save run
@@ -75,3 +76,79 @@ class ExperimentService:
             "experiment_id": experiment.id,
             "results": results
         }
+
+    @staticmethod
+    def execute_experiment(experiment_id: str):
+        db = SessionLocal()
+
+        try:
+            experiment = db.query(Experiment).filter(
+                Experiment.id == experiment_id
+            ).first()
+
+            if not experiment:
+                return
+
+            experiment.status = "running"
+            db.commit()
+
+            prompt_version = db.query(PromptVersion).filter(
+                PromptVersion.id == experiment.prompt_version_id
+            ).first()
+
+            dataset_items = db.query(DatasetItem).filter(
+                DatasetItem.dataset_id == experiment.dataset_id
+            ).all()
+
+            for item in dataset_items:
+                final_prompt, output = ExecutionService.run(prompt_version, item.input)
+
+                # score = 1
+                score = SimpleEvaluator.score(output, item.expected_output)
+
+                run = Run(
+                    id=str(uuid.uuid4()),
+                    experiment_id=experiment.id,
+                    dataset_item_id=item.id,
+                    input=item.input,
+                    output=output,
+                    score=score,
+                    latency_ms=None,
+                    extra_data={"final_prompt": final_prompt},
+                    created_at=datetime.utcnow()
+                )
+
+                db.add(run)
+                db.commit()
+
+            experiment.status = "completed"
+            db.commit()
+
+        except Exception:
+            db.rollback()
+            experiment = db.query(Experiment).filter(
+                Experiment.id == experiment_id
+            ).first()
+            if experiment:
+                experiment.status = "failed"
+                db.commit()
+            raise
+
+        finally:
+            db.close()
+
+    @staticmethod
+    def create_experiment(db: Session, prompt_version_id: str, dataset_id: str):
+        experiment = Experiment(
+            id=str(uuid.uuid4()),
+            prompt_version_id=prompt_version_id,
+            dataset_id=dataset_id,
+            status="pending",
+            created_at=datetime.utcnow()
+        )
+
+        db.add(experiment)
+        db.commit()
+        db.refresh(experiment)
+
+        return experiment

@@ -19,6 +19,7 @@ class AnalyticsService:
         return {
             "experiment_id": experiment_id,
             "num_runs": len(runs),
+            "sum": sum(scores),
             "avg_score": avg_score
         }
 
