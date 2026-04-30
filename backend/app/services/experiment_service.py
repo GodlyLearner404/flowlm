@@ -11,6 +11,10 @@ from app.evaluation.llm_evaluator import LLMEvaluator
 import uuid
 from datetime import datetime
 
+def estimate_cost(tokens):
+    if not tokens:
+        return None
+    return tokens * 0.0000005   # rough estimate
 
 class ExperimentService:
 
@@ -42,11 +46,12 @@ class ExperimentService:
 
         for item in dataset_items:
             # run LLM
-            final_prompt, output = ExecutionService.run(prompt_version, item.input)
+            final_prompt, output, tokens = ExecutionService.run(prompt_version, item.input)
 
             # score = 1
             score = SimpleEvaluator.score(output, item.expected_output)
             # score = LLMEvaluator.score(output, item.expected_output) # Slows
+            cost = estimate_cost(tokens)
 
             # save run
             run = Run(
@@ -58,6 +63,8 @@ class ExperimentService:
                 score=score,
                 latency_ms=None,
                 extra_data={},
+                tokens_used=tokens,
+                cost=cost,
                 created_at=datetime.utcnow()
             )
 
@@ -103,11 +110,12 @@ class ExperimentService:
             ).all()
 
             for item in dataset_items:
-                final_prompt, output = ExecutionService.run(prompt_version, item.input)
+                final_prompt, output, tokens = ExecutionService.run(prompt_version, item.input)
 
                 # score = 1
                 score = SimpleEvaluator.score(output, item.expected_output)
                 # score = LLMEvaluator.score(output, item.expected_output) # Slows
+                cost = estimate_cost(tokens)
 
                 run = Run(
                     id=str(uuid.uuid4()),
@@ -118,6 +126,8 @@ class ExperimentService:
                     score=score,
                     latency_ms=None,
                     extra_data={"final_prompt": final_prompt},
+                    tokens_used=tokens,
+                    cost=cost,
                     created_at=datetime.utcnow()
                 )
 

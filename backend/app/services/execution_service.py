@@ -14,10 +14,10 @@ class ExecutionService:
         )
 
         # call LLM
-        output = OpenRouterClient.generate(
+        output, tokens = OpenRouterClient.generate(
             final_prompt,
             prompt_version.model,
             prompt_version.config or {}
         )
 
-        return final_prompt, output
+        return final_prompt, output, tokens

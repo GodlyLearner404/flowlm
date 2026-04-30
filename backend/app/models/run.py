@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from app.core.database import Base
 import uuid
 from datetime import datetime
+from sqlalchemy import Float, Integer
 
 
 class Run(Base):
@@ -23,5 +24,8 @@ class Run(Base):
     extra_data = Column(JSON, nullable=True)
 
     created_at = Column(TIMESTAMP, default=datetime.utcnow)
+  
+    tokens_used = Column(Integer, nullable=True)
+    cost = Column(Float, nullable=True)
 
     experiment = relationship("Experiment", backref="runs")

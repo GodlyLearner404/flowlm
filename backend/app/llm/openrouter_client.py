@@ -26,4 +26,10 @@ class OpenRouterClient:
             **safe_config   # ✅ THIS IS THE FIX
         )
 
-        return response.choices[0].message.content
+        output = response.choices[0].message.content
+
+        usage = response.usage if hasattr(response, "usage") else None
+
+        tokens = usage.total_tokens if usage else None
+
+        return output, tokens
