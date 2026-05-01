@@ -1,0 +1,298 @@
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --ink: #18202a;
+  --muted: #667085;
+  --line: #d9dee7;
+  --accent: #126e82;
+  --accent-strong: #0d5363;
+  --good: #4f8a5f;
+  --warn: #a15c24;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--ink);
+  cursor: pointer;
+  min-height: 38px;
+  padding: 8px 12px;
+}
+
+button:hover {
+  border-color: var(--accent);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.shell {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.topbar,
+.controlBand,
+.panelHeader,
+.runMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.topbar {
+  margin-bottom: 16px;
+}
+
+.eyebrow {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0 0 4px;
+  text-transform: uppercase;
+}
+
+h1,
+h2 {
+  margin: 0;
+}
+
+h1 {
+  font-size: 30px;
+  letter-spacing: 0;
+}
+
+h2 {
+  font-size: 18px;
+}
+
+.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.primary:hover {
+  background: var(--accent-strong);
+}
+
+.notice {
+  background: #fff7e8;
+  border: 1px solid #f0c78a;
+  border-radius: 6px;
+  color: var(--warn);
+  margin-bottom: 16px;
+  padding: 10px 12px;
+}
+
+.grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.lower {
+  margin-top: 16px;
+}
+
+.panel,
+.controlBand {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.panel {
+  min-width: 0;
+}
+
+label,
+.datasetSelect,
+.statusBox {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+  margin-top: 12px;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  background: #ffffff;
+  padding: 9px 10px;
+}
+
+textarea {
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.split {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.controlBand {
+  display: grid;
+  grid-template-columns: 1.4fr 1.2fr 180px;
+  margin-top: 16px;
+}
+
+.statusBox {
+  align-self: end;
+  background: #eef8f7;
+  border-radius: 6px;
+  color: var(--accent-strong);
+  margin-top: 0;
+  padding: 9px 10px;
+}
+
+.statusBox strong {
+  color: var(--ink);
+}
+
+.tableWrap {
+  overflow: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+
+th,
+td {
+  border-bottom: 1px solid var(--line);
+  padding: 10px 8px;
+  text-align: left;
+}
+
+th {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+tr {
+  cursor: pointer;
+}
+
+tr.selected {
+  background: #edf8fa;
+}
+
+.chart {
+  align-items: end;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 10px;
+  height: 240px;
+  margin-top: 16px;
+  padding: 8px 4px 0;
+}
+
+.bar {
+  align-items: start;
+  background: linear-gradient(180deg, #4f8a5f 0%, #126e82 100%);
+  border: 0;
+  border-radius: 5px 5px 0 0;
+  color: #ffffff;
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  min-height: 20px;
+  min-width: 34px;
+  padding: 6px 2px;
+}
+
+.bar span {
+  font-size: 11px;
+  writing-mode: vertical-rl;
+}
+
+.runsPanel {
+  margin-top: 16px;
+}
+
+.runsGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 12px;
+}
+
+.runCard {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.runMeta {
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.runMeta strong {
+  color: var(--good);
+}
+
+pre {
+  background: #f1f4f7;
+  border-radius: 6px;
+  margin: 0 0 10px;
+  overflow: auto;
+  padding: 10px;
+}
+
+.runCard p,
+.empty {
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .grid,
+  .runsGrid,
+  .controlBand,
+  .split {
+    grid-template-columns: 1fr;
+  }
+
+  .topbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

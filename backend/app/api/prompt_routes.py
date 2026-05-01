@@ -6,6 +6,7 @@ from app.schemas.prompt_version_schema import PromptVersionCreate
 from app.services.prompt_version_service import PromptVersionService
 from app.core.database import get_db
 from app.services.execution_service import ExecutionService
+from app.models.prompt import Prompt
 from app.models.prompt_version import PromptVersion
 
 router = APIRouter()
@@ -20,6 +21,31 @@ def create_prompt(name: str, description: str = None, db: Session = Depends(get_
         "name": prompt.name,
         "description": prompt.description
     }
+
+
+@router.get("/prompts")
+def list_prompts(db: Session = Depends(get_db)):
+    prompts = db.query(Prompt).all()
+
+    return [
+        {
+            "id": prompt.id,
+            "name": prompt.name,
+            "description": prompt.description,
+            "versions": [
+                {
+                    "id": version.id,
+                    "version": version.version_number,
+                    "template": version.template,
+                    "variables": version.variables or [],
+                    "model": version.model,
+                    "config": version.config or {}
+                }
+                for version in prompt.versions
+            ]
+        }
+        for prompt in prompts
+    ]
 
 @router.post("/prompt/{prompt_id}/version")
 def create_prompt_version(
@@ -41,6 +67,24 @@ def create_prompt_version(
         "prompt_id": version.prompt_id,
         "version": version.version_number
     }
+
+
+@router.get("/prompt-versions")
+def list_prompt_versions(db: Session = Depends(get_db)):
+    versions = db.query(PromptVersion).all()
+
+    return [
+        {
+            "id": version.id,
+            "prompt_id": version.prompt_id,
+            "version": version.version_number,
+            "template": version.template,
+            "variables": version.variables or [],
+            "model": version.model,
+            "config": version.config or {}
+        }
+        for version in versions
+    ]
 
 @router.post("/test-run/{version_id}")
 def test_run(version_id: str, input_data: dict, db: Session = Depends(get_db)):
