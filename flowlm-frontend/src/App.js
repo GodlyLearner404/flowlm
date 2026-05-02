@@ -41,6 +41,7 @@ function App() {
   const [prompts, setPrompts] = useState([]);
   const [datasets, setDatasets] = useState([]);
   const [experiments, setExperiments] = useState([]);
+  const [selectedPromptId, setSelectedPromptId] = useState("");
   const [selectedPromptVersionId, setSelectedPromptVersionId] = useState("");
   const [selectedDatasetId, setSelectedDatasetId] = useState("");
   const [selectedExperimentId, setSelectedExperimentId] = useState("");
@@ -87,17 +88,19 @@ function App() {
       setDatasets(datasetRes.data);
       setExperiments(sortedExperiments);
 
+      const firstPrompt = promptRes.data[0];
       const firstVersion = promptRes.data.flatMap((prompt) => prompt.versions)[0];
       const firstDataset = datasetRes.data[0];
       const firstExperiment = sortedExperiments[0];
 
+      if (!selectedPromptId && firstPrompt) setSelectedPromptId(firstPrompt.id);
       if (!selectedPromptVersionId && firstVersion) setSelectedPromptVersionId(firstVersion.id);
       if (!selectedDatasetId && firstDataset) setSelectedDatasetId(firstDataset.id);
       if (!selectedExperimentId && firstExperiment) setSelectedExperimentId(firstExperiment.experiment_id);
     } catch (error) {
       setMessage(error.response?.data?.detail || "Could not load dashboard data.");
     }
-  }, [selectedDatasetId, selectedExperimentId, selectedPromptVersionId]);
+  }, [selectedDatasetId, selectedExperimentId, selectedPromptId, selectedPromptVersionId]);
 
   const loadRuns = async (experimentId) => {
     try {
@@ -140,20 +143,40 @@ function App() {
 
     try {
       const promptRes = await createPrompt(promptName, promptDescription);
+      setMessage("Prompt created.");
+      await loadAll();
+      setSelectedPromptId(promptRes.data.id);
+    } catch (error) {
+      setMessage(error.response?.data?.detail || "Could not create prompt.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreatePromptVersion = async () => {
+    if (!selectedPromptId) {
+      setMessage("Create or select a prompt first.");
+      return;
+    }
+
+    setLoading(true);
+    setMessage("");
+
+    try {
       const variables = promptVariables.split(",").map((item) => item.trim()).filter(Boolean);
       const config = parseJson(promptConfig, {});
-      const versionRes = await createPromptVersion(promptRes.data.id, {
+      const versionRes = await createPromptVersion(selectedPromptId, {
         template: promptTemplate,
         variables,
         model: promptModel,
         config
       });
 
-      setSelectedPromptVersionId(versionRes.data.id);
-      setMessage("Prompt and version created.");
+      setMessage("Prompt version created.");
       await loadAll();
+      setSelectedPromptVersionId(versionRes.data.id);
     } catch (error) {
-      setMessage(error.response?.data?.detail || "Could not create prompt.");
+      setMessage(error.response?.data?.detail || "Could not create prompt version.");
     } finally {
       setLoading(false);
     }
@@ -278,16 +301,26 @@ function App() {
         <form className="panel" onSubmit={handleCreatePrompt}>
           <div className="panelHeader">
             <h2>Prompt editor</h2>
-            <button type="submit" disabled={loading}>Create version</button>
+            <button type="submit" disabled={loading}>Create prompt</button>
           </div>
           <label>Name<input value={promptName} onChange={(e) => setPromptName(e.target.value)} /></label>
           <label>Description<input value={promptDescription} onChange={(e) => setPromptDescription(e.target.value)} /></label>
+          <div className="datasetSelect">
+            <span>Active prompt</span>
+            <select value={selectedPromptId} onChange={(e) => setSelectedPromptId(e.target.value)}>
+              <option value="">Select prompt</option>
+              {prompts.map((prompt) => (
+                <option key={prompt.id} value={prompt.id}>{prompt.name}</option>
+              ))}
+            </select>
+          </div>
           <label>Template<textarea rows="5" value={promptTemplate} onChange={(e) => setPromptTemplate(e.target.value)} /></label>
           <div className="split">
             <label>Variables<input value={promptVariables} onChange={(e) => setPromptVariables(e.target.value)} /></label>
             <label>Model<input value={promptModel} onChange={(e) => setPromptModel(e.target.value)} /></label>
           </div>
           <label>Config JSON<textarea rows="3" value={promptConfig} onChange={(e) => setPromptConfig(e.target.value)} /></label>
+          <button type="button" onClick={handleCreatePromptVersion} disabled={loading}>Create version</button>
         </form>
 
         <form className="panel" onSubmit={handleCreateDataset}>
@@ -403,6 +436,11 @@ function App() {
             <h2>Winner</h2>
             <p>Version: {summary.winner.prompt_version_id}</p>
             <p>Score: {formatScore(summary.winner.avg_score)}</p>
+          </div>
+        )}
+        {summary?.saved_winner && (
+          <div style={{ marginTop: 10 }}>
+            <strong>Saved Winner:</strong> {summary.saved_winner}
           </div>
         )}
         {summary?.versions?.length > 0 && (

@@ -10,6 +10,7 @@ from app.evaluation.llm_evaluator import LLMEvaluator
 
 import uuid
 from datetime import datetime
+from collections import defaultdict
 
 def estimate_cost(tokens):
     if not tokens:
@@ -144,6 +145,27 @@ class ExperimentService:
                     db.add(run)
                     db.commit()
 
+            # 🔥 compute winner after all runs
+            runs = db.query(Run).filter(Run.experiment_id == experiment.id).all()
+
+            groups = defaultdict(list)
+
+            for run in runs:
+                if run.score is not None:
+                    groups[run.prompt_version_id].append(run.score)
+
+            best_version = None
+            best_score = -1
+
+            for version_id, scores in groups.items():
+                avg = sum(scores) / len(scores)
+
+                if avg > best_score:
+                    best_score = avg
+                    best_version = version_id
+
+            # 🔥 save winner
+            experiment.best_prompt_version_id = best_version
             experiment.status = "completed"
             db.commit()
 

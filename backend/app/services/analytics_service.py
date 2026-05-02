@@ -36,12 +36,15 @@ class AnalyticsService:
         scored_runs = [run.score for run in runs if run.score is not None]
         avg_score = sum(scored_runs) / len(scored_runs) if scored_runs else None
 
+        experiment = db.query(Experiment).filter(Experiment.id == experiment_id).first()
+
         return {
             "experiment_id": experiment_id,
             "num_runs": len(runs),
             "avg_score": avg_score,
             "versions": result,
-            "winner": winner
+            "winner": winner,
+            "saved_winner": experiment.best_prompt_version_id if experiment else None
         }
 
     @staticmethod

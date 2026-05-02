@@ -12,6 +12,7 @@ class Experiment(Base):
 
     prompt_version_id = Column(String, ForeignKey("prompt_versions.id"), nullable=False)
     prompt_version_ids = Column(JSONB, nullable=True)
+    best_prompt_version_id = Column(String, nullable=True)
     dataset_id = Column(String, ForeignKey("datasets.id"), nullable=False)
 
     status = Column(String, default="pending")  # pending, running, completed
