@@ -183,12 +183,13 @@ class ExperimentService:
             db.close()
 
     @staticmethod
-    def create_experiment(db, prompt_version_ids, dataset_id):
+    def create_experiment(db, prompt_version_ids, dataset_id, user_id):
         experiment = Experiment(
             id=str(uuid.uuid4()),
             prompt_version_id=prompt_version_ids[0],
             prompt_version_ids=prompt_version_ids,
             dataset_id=dataset_id,
+            user_id=user_id,
             status="pending",
             created_at=datetime.utcnow()
         )

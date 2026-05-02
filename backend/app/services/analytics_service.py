@@ -8,8 +8,11 @@ class AnalyticsService:
 
     @staticmethod
 
-    def get_experiment_summary(db: Session, experiment_id: str):
-        runs = db.query(Run).filter(Run.experiment_id == experiment_id).all()
+    def get_experiment_summary(db: Session, experiment_id: str, user_id:str):
+        runs = db.query(Run).join(Experiment).filter(
+            Run.experiment_id == experiment_id,
+            Experiment.user_id == user_id   # 🔥 ADD THIS
+        ).all()
 
         groups = defaultdict(list)
 
@@ -48,13 +51,13 @@ class AnalyticsService:
         }
 
     @staticmethod
-    def compare_experiments(db: Session, limit: int = 50, offset: int = 0):
-        experiments = db.query(Experiment).offset(offset).limit(limit).all()
+    def compare_experiments(db: Session, limit: int = 50, offset: int = 0, user_id: str = None):
+        experiments = db.query(Experiment).filter(Experiment.user_id == user_id).offset(offset).limit(limit).all()
 
         results = []
 
         for exp in experiments:
-            summary = AnalyticsService.get_experiment_summary(db, exp.id)
+            summary = AnalyticsService.get_experiment_summary(db, exp.id, user_id)
             results.append({
                 "experiment_id": exp.id,
                 "num_runs": summary["num_runs"],

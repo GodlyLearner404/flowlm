@@ -8,13 +8,19 @@ from app.core.database import get_db
 from app.services.execution_service import ExecutionService
 from app.models.prompt import Prompt
 from app.models.prompt_version import PromptVersion
+from backend.app.core.deps import get_current_user
 
 router = APIRouter()
 
 
 @router.post("/prompt")
-def create_prompt(name: str, description: str = None, db: Session = Depends(get_db)):
-    prompt = PromptService.create_prompt(db, name, description)
+def create_prompt(
+    name: str,
+    description: str = None,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user)   # 🔥 ADD THIS
+):
+    prompt = PromptService.create_prompt(db, name, description, user_id)
 
     return {
         "id": prompt.id,
@@ -32,6 +38,7 @@ def list_prompts(
     prompts = (
         db.query(Prompt)
         .options(joinedload(Prompt.versions))
+        .filter(Prompt.user_id == get_current_user(db))  # 🔥 FILTER BY USER
         .offset(offset)
         .limit(limit)
         .all()

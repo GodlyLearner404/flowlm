@@ -48,7 +48,7 @@ def run_experiment(
 
     # create experiment
     experiment = ExperimentService.create_experiment(
-        db, prompt_version_ids, dataset_id
+        db, prompt_version_ids, dataset_id, user_id
     )
 
     # send task to Celery
