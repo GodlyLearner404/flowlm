@@ -9,15 +9,17 @@ from app.models.dataset import Dataset
 from app.models.experiment import Experiment
 from app.models.prompt_version import PromptVersion
 from app.models.run import Run
+from app.core.deps import get_current_user
 
 router = APIRouter()
 
 
 @router.post("/experiment/run")
 def run_experiment(
+    prompt_version_ids: list[str],
     dataset_id: str,
-    prompt_version_ids: list[str] = Body(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user)
 ):
     # 🔥 Validate ALL prompt versions
     prompt_versions = db.query(PromptVersion).filter(

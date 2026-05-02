@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
+import Login from "./Login";
 import {
   addDatasetItem,
   createDataset,
@@ -38,6 +39,7 @@ function truncate(value, limit = 300) {
 }
 
 function App() {
+  const [token, setToken] = useState("");
   const [prompts, setPrompts] = useState([]);
   const [datasets, setDatasets] = useState([]);
   const [experiments, setExperiments] = useState([]);
@@ -63,6 +65,19 @@ function App() {
   const [datasetDescription, setDatasetDescription] = useState("Small evaluation set");
   const [itemInput, setItemInput] = useState(defaultInputJson);
   const [expectedOutput, setExpectedOutput] = useState(defaultExpected);
+
+  useEffect(() => {
+    const storedToken = localStorage.getItem("token") || "";
+    setToken(storedToken);
+  }, []);
+
+  useEffect(() => {
+    if (token) {
+      localStorage.setItem("token", token);
+      return;
+    }
+    localStorage.removeItem("token");
+  }, [token]);
 
   const promptVersions = useMemo(
     () => prompts.flatMap((prompt) => prompt.versions.map((version) => ({
@@ -283,16 +298,48 @@ function App() {
 
   const maxScore = Math.max(...experiments.map((exp) => exp.avg_score || 0), 1);
 
+  const handleLogin = (value) => {
+    if (typeof value === "string") {
+      setToken(value);
+      return;
+    }
+
+    if (value && typeof value === "object") {
+      const nextToken = value.token || value.access_token || "";
+      setToken(nextToken);
+    }
+  };
+
+  const handleLogout = () => {
+    setToken("");
+  };
+
+  if (!token) {
+    return (
+      <main
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 16
+        }}
+      >
+        <div style={{ width: "100%", maxWidth: 360 }}>
+          <Login onLogin={handleLogin} />
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="shell">
       <header className="topbar">
         <div>
           <p className="eyebrow">FlowLM workbench</p>
-          <h1>Prompt, dataset, and experiment control</h1>
+          <h1 className="eyebrowbo">Prompt, dataset, and experiment control</h1>
         </div>
-        <button className="primary" onClick={handleRunExperiment} disabled={loading}>
-          {loading ? "Working..." : "Run experiment"}
-        </button>
+        <button type="button" onClick={handleLogout}>Logout</button>
       </header>
 
       {message && <div className="notice">{message}</div>}
@@ -372,6 +419,9 @@ function App() {
           <span>Status</span>
           <strong>{status?.status || "idle"}</strong>
         </div>
+        <button className="primary" onClick={handleRunExperiment} disabled={loading}>
+          {loading ? "Working..." : "Run experiment"}
+        </button>
       </section>
 
       <section className="grid lower">
