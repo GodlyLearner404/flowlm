@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.database import get_db
 from app.services.dataset_service import DatasetService, DatasetItemService
@@ -21,8 +21,18 @@ def create_dataset(req: DatasetCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/datasets")
-def list_datasets(db: Session = Depends(get_db)):
-    datasets = db.query(Dataset).all()
+def list_datasets(
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db)
+):
+    datasets = (
+        db.query(Dataset)
+        .options(joinedload(Dataset.items))
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
 
     return [
         {
@@ -62,8 +72,19 @@ def add_dataset_item(
 
 
 @router.get("/dataset/{dataset_id}/items")
-def list_dataset_items(dataset_id: str, db: Session = Depends(get_db)):
-    items = db.query(DatasetItem).filter(DatasetItem.dataset_id == dataset_id).all()
+def list_dataset_items(
+    dataset_id: str,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db)
+):
+    items = (
+        db.query(DatasetItem)
+        .filter(DatasetItem.dataset_id == dataset_id)
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
 
     return [
         {

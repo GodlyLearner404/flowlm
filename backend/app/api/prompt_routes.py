@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session, joinedload
 
 from app.services.prompt_service import PromptService
 from app.schemas.prompt_version_schema import PromptVersionCreate
@@ -24,8 +24,18 @@ def create_prompt(name: str, description: str = None, db: Session = Depends(get_
 
 
 @router.get("/prompts")
-def list_prompts(db: Session = Depends(get_db)):
-    prompts = db.query(Prompt).all()
+def list_prompts(
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db)
+):
+    prompts = (
+        db.query(Prompt)
+        .options(joinedload(Prompt.versions))
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
 
     return [
         {
@@ -70,8 +80,12 @@ def create_prompt_version(
 
 
 @router.get("/prompt-versions")
-def list_prompt_versions(db: Session = Depends(get_db)):
-    versions = db.query(PromptVersion).all()
+def list_prompt_versions(
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db)
+):
+    versions = db.query(PromptVersion).offset(offset).limit(limit).all()
 
     return [
         {

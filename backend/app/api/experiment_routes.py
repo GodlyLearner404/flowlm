@@ -1,10 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.services.experiment_service import ExperimentService
 from app.tasks.experiment_tasks import run_experiment_task
+from app.models.dataset import Dataset
 from app.models.experiment import Experiment
+from app.models.prompt_version import PromptVersion
 from app.models.run import Run
 
 router = APIRouter()
@@ -12,13 +15,38 @@ router = APIRouter()
 
 @router.post("/experiment/run")
 def run_experiment(
-    prompt_version_id: str,
     dataset_id: str,
+    prompt_version_ids: list[str] = Body(...),
     db: Session = Depends(get_db)
 ):
+    # 🔥 Validate ALL prompt versions
+    prompt_versions = db.query(PromptVersion).filter(
+        PromptVersion.id.in_(prompt_version_ids)
+    ).all()
+
+    if len(prompt_versions) != len(prompt_version_ids):
+        raise HTTPException(status_code=404, detail="One or more prompt versions are invalid")
+
+    invalid_models = [
+        version.model
+        for version in prompt_versions
+        if not version.model or version.model == "gpt-test" or "/" not in version.model
+    ]
+
+    if invalid_models:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid OpenRouter model id: {invalid_models[0]}"
+        )
+
+    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Invalid dataset")
+
     # create experiment
     experiment = ExperimentService.create_experiment(
-        db, prompt_version_id, dataset_id
+        db, prompt_version_ids, dataset_id
     )
 
     # send task to Celery
@@ -37,7 +65,11 @@ def get_experiment_status(experiment_id: str, db: Session = Depends(get_db)):
     if not experiment:
         raise HTTPException(status_code=404, detail="Experiment not found")
 
-    run_count = db.query(Run).filter(Run.experiment_id == experiment_id).count()
+    run_count = (
+        db.query(func.count(Run.id))
+        .filter(Run.experiment_id == experiment_id)
+        .scalar()
+    )
 
     return {
         "experiment_id": experiment.id,
@@ -47,8 +79,24 @@ def get_experiment_status(experiment_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/experiment/{experiment_id}/runs")
-def get_experiment_runs(experiment_id: str, db: Session = Depends(get_db)):
-    runs = db.query(Run).filter(Run.experiment_id == experiment_id).all()
+def get_experiment_runs(
+    experiment_id: str,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db)
+):
+    experiment = db.query(Experiment).filter(Experiment.id == experiment_id).first()
+
+    if not experiment:
+        raise HTTPException(status_code=404, detail="Experiment not found")
+
+    runs = (
+        db.query(Run)
+        .filter(Run.experiment_id == experiment_id)
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
 
     return [
         {

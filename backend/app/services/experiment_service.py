@@ -48,9 +48,9 @@ class ExperimentService:
             # run LLM
             final_prompt, output, tokens = ExecutionService.run(prompt_version, item.input)
 
-            # score = 1
-            score = SimpleEvaluator.score(output, item.expected_output)
-            # score = LLMEvaluator.score(output, item.expected_output) # Slows
+            # score
+            # score = SimpleEvaluator.score(output, item.expected_output)
+            score = LLMEvaluator.score(output, item.expected_output) # Slows
             cost = estimate_cost(tokens)
 
             # save run
@@ -101,38 +101,48 @@ class ExperimentService:
             experiment.status = "running"
             db.commit()
 
-            prompt_version = db.query(PromptVersion).filter(
-                PromptVersion.id == experiment.prompt_version_id
-            ).first()
-
             dataset_items = db.query(DatasetItem).filter(
                 DatasetItem.dataset_id == experiment.dataset_id
             ).all()
 
-            for item in dataset_items:
-                final_prompt, output, tokens = ExecutionService.run(prompt_version, item.input)
+            # 🔥 SUPPORT BOTH OLD + NEW (IMPORTANT)
+            version_ids = (
+                experiment.prompt_version_ids
+                if experiment.prompt_version_ids
+                else [experiment.prompt_version_id]
+            )
 
-                # score = 1
-                score = SimpleEvaluator.score(output, item.expected_output)
-                # score = LLMEvaluator.score(output, item.expected_output) # Slows
-                cost = estimate_cost(tokens)
+            for version_id in version_ids:
 
-                run = Run(
-                    id=str(uuid.uuid4()),
-                    experiment_id=experiment.id,
-                    dataset_item_id=item.id,
-                    input=item.input,
-                    output=output,
-                    score=score,
-                    latency_ms=None,
-                    extra_data={"final_prompt": final_prompt},
-                    tokens_used=tokens,
-                    cost=cost,
-                    created_at=datetime.utcnow()
-                )
+                prompt_version = db.query(PromptVersion).filter(
+                    PromptVersion.id == version_id
+                ).first()
 
-                db.add(run)
-                db.commit()
+                for item in dataset_items:
+
+                    final_prompt, output, tokens = ExecutionService.run(
+                        prompt_version,
+                        item.input
+                    )
+
+                    # score
+                    # score = SimpleEvaluator.score(output, item.expected_output)
+                    score = LLMEvaluator.score(output, item.expected_output) # Slows
+
+                    run = Run(
+                        id=str(uuid.uuid4()),
+                        experiment_id=experiment.id,
+                        prompt_version_id=version_id,  # 🔥 IMPORTANT
+                        dataset_item_id=item.id,
+                        input=item.input,
+                        output=output,
+                        score=score,
+                        tokens_used=tokens,
+                        created_at=datetime.utcnow()
+                    )
+
+                    db.add(run)
+                    db.commit()
 
             experiment.status = "completed"
             db.commit()
@@ -151,10 +161,11 @@ class ExperimentService:
             db.close()
 
     @staticmethod
-    def create_experiment(db: Session, prompt_version_id: str, dataset_id: str):
+    def create_experiment(db, prompt_version_ids, dataset_id):
         experiment = Experiment(
             id=str(uuid.uuid4()),
-            prompt_version_id=prompt_version_id,
+            prompt_version_id=prompt_version_ids[0],
+            prompt_version_ids=prompt_version_ids,
             dataset_id=dataset_id,
             status="pending",
             created_at=datetime.utcnow()

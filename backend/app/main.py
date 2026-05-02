@@ -23,4 +23,8 @@ app.include_router(analytics_router)
 
 @app.get("/")
 def root():
-    return {"message": "FlowLM backend running"}
+    return {
+        "status": "ok",
+        "service": "FlowLM",
+        "version": "v1"
+    }

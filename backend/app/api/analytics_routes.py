@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -13,5 +13,9 @@ def get_summary(experiment_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/experiments/compare")
-def compare(db: Session = Depends(get_db)):
-    return AnalyticsService.compare_experiments(db)
+def compare(
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db)
+):
+    return AnalyticsService.compare_experiments(db, limit, offset)

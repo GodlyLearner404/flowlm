@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import {
   addDatasetItem,
@@ -9,6 +9,7 @@ import {
   getExperiments,
   getPrompts,
   getRuns,
+  getSummary,
   getStatus,
   runExperiment
 } from "./api";
@@ -31,6 +32,11 @@ function formatScore(score) {
   return Number(score).toFixed(2);
 }
 
+function truncate(value, limit = 300) {
+  if (!value) return "No output saved yet.";
+  return value.length > limit ? `${value.slice(0, limit)}...` : value;
+}
+
 function App() {
   const [prompts, setPrompts] = useState([]);
   const [datasets, setDatasets] = useState([]);
@@ -39,9 +45,11 @@ function App() {
   const [selectedDatasetId, setSelectedDatasetId] = useState("");
   const [selectedExperimentId, setSelectedExperimentId] = useState("");
   const [runs, setRuns] = useState([]);
+  const [summary, setSummary] = useState(null);
   const [status, setStatus] = useState(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const intervalRef = useRef(null);
 
   const [promptName, setPromptName] = useState("Teaching prompt");
   const [promptDescription, setPromptDescription] = useState("Short educational answers");
@@ -64,28 +72,47 @@ function App() {
   );
 
   const loadAll = useCallback(async () => {
-    const [promptRes, datasetRes, experimentRes] = await Promise.all([
-      getPrompts(),
-      getDatasets(),
-      getExperiments()
-    ]);
+    try {
+      const [promptRes, datasetRes, experimentRes] = await Promise.all([
+        getPrompts(),
+        getDatasets(),
+        getExperiments()
+      ]);
 
-    setPrompts(promptRes.data);
-    setDatasets(datasetRes.data);
-    setExperiments(experimentRes.data);
+      const sortedExperiments = [...experimentRes.data].sort(
+        (a, b) => (b.avg_score || 0) - (a.avg_score || 0)
+      );
 
-    const firstVersion = promptRes.data.flatMap((prompt) => prompt.versions)[0];
-    const firstDataset = datasetRes.data[0];
-    const firstExperiment = experimentRes.data[0];
+      setPrompts(promptRes.data);
+      setDatasets(datasetRes.data);
+      setExperiments(sortedExperiments);
 
-    if (!selectedPromptVersionId && firstVersion) setSelectedPromptVersionId(firstVersion.id);
-    if (!selectedDatasetId && firstDataset) setSelectedDatasetId(firstDataset.id);
-    if (!selectedExperimentId && firstExperiment) setSelectedExperimentId(firstExperiment.experiment_id);
+      const firstVersion = promptRes.data.flatMap((prompt) => prompt.versions)[0];
+      const firstDataset = datasetRes.data[0];
+      const firstExperiment = sortedExperiments[0];
+
+      if (!selectedPromptVersionId && firstVersion) setSelectedPromptVersionId(firstVersion.id);
+      if (!selectedDatasetId && firstDataset) setSelectedDatasetId(firstDataset.id);
+      if (!selectedExperimentId && firstExperiment) setSelectedExperimentId(firstExperiment.experiment_id);
+    } catch (error) {
+      setMessage(error.response?.data?.detail || "Could not load dashboard data.");
+    }
   }, [selectedDatasetId, selectedExperimentId, selectedPromptVersionId]);
 
   const loadRuns = async (experimentId) => {
-    const res = await getRuns(experimentId);
-    setRuns(res.data);
+    try {
+      const [runsRes, summaryRes] = await Promise.all([
+        getRuns(experimentId),
+        getSummary(experimentId)
+      ]);
+
+      setRuns(runsRes.data);
+      setSummary(summaryRes.data);
+    } catch (error) {
+      setRuns([]);
+      setSummary(null);
+      setMessage(error.response?.data?.detail || "Could not load experiment runs.");
+    }
   };
 
   useEffect(() => {
@@ -95,8 +122,16 @@ function App() {
   useEffect(() => {
     if (!selectedExperimentId) return;
     loadRuns(selectedExperimentId);
-    getStatus(selectedExperimentId).then((res) => setStatus(res.data)).catch(() => {});
+    getStatus(selectedExperimentId)
+      .then((res) => setStatus(res.data))
+      .catch((error) => setMessage(error.response?.data?.detail || "Could not load experiment status."));
   }, [selectedExperimentId]);
+
+  useEffect(() => () => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+  }, []);
 
   const handleCreatePrompt = async (event) => {
     event.preventDefault();
@@ -185,7 +220,7 @@ function App() {
     setMessage("Experiment queued.");
 
     try {
-      const res = await runExperiment(selectedPromptVersionId, selectedDatasetId);
+      const res = await runExperiment([selectedPromptVersionId], selectedDatasetId);
       const experimentId = res.data.experiment_id;
       setSelectedExperimentId(experimentId);
       setStatus(res.data);
@@ -197,21 +232,28 @@ function App() {
   };
 
   const pollExperiment = (experimentId) => {
-    const interval = setInterval(async () => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+
+    intervalRef.current = setInterval(async () => {
       try {
         const statusRes = await getStatus(experimentId);
         setStatus(statusRes.data);
 
         if (["completed", "failed"].includes(statusRes.data.status)) {
-          clearInterval(interval);
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
           setLoading(false);
           await loadRuns(experimentId);
           await loadAll();
           setMessage(statusRes.data.status === "completed" ? "Experiment completed." : "Experiment failed.");
         }
-      } catch {
-        clearInterval(interval);
+      } catch (error) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
         setLoading(false);
+        setMessage(error.response?.data?.detail || "Could not poll experiment status.");
       }
     }, 2000);
   };
@@ -356,6 +398,46 @@ function App() {
             Load runs
           </button>
         </div>
+        {summary?.winner && (
+          <div className="winnerBox">
+            <h2>Winner</h2>
+            <p>Version: {summary.winner.prompt_version_id}</p>
+            <p>Score: {formatScore(summary.winner.avg_score)}</p>
+          </div>
+        )}
+        {summary?.versions?.length > 0 && (
+          <div className="tableWrap summaryTable">
+            <table>
+              <thead>
+                <tr>
+                  <th>Prompt version</th>
+                  <th>Runs</th>
+                  <th>Avg score</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summary.versions.map((version) => {
+                  const isWinner =
+                    summary?.winner?.prompt_version_id === version.prompt_version_id;
+
+                  return (
+                    <tr
+                      key={version.prompt_version_id}
+                      className={isWinner ? "winnerRow" : ""}
+                    >
+                      <td>
+                        {version.prompt_version_id}
+                        {isWinner && <span className="winnerMark"> Winner</span>}
+                      </td>
+                      <td>{version.num_runs}</td>
+                      <td>{formatScore(version.avg_score)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
         <div className="runsGrid">
           {runs.map((run) => (
             <article className="runCard" key={run.id}>
@@ -364,7 +446,7 @@ function App() {
                 <span>{run.id.slice(0, 8)}</span>
               </div>
               <pre>{JSON.stringify(run.input, null, 2)}</pre>
-              <p>{run.output || "No output saved yet."}</p>
+              <p>{truncate(run.output)}</p>
             </article>
           ))}
           {!runs.length && <p className="empty">Select an experiment and load runs to inspect outputs.</p>}

@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const API = axios.create({
-  baseURL: "http://127.0.0.1:8000"
+  baseURL: process.env.REACT_APP_API_URL || "http://127.0.0.1:8000"
 });
 
 export const getExperiments = () => API.get("/experiments/compare");
@@ -20,7 +20,7 @@ export const createDataset = (payload) => API.post("/dataset", payload);
 export const addDatasetItem = (datasetId, payload) =>
   API.post(`/dataset/${datasetId}/item`, payload);
 
-export const runExperiment = (prompt_version_id, dataset_id) =>
-  API.post("/experiment/run", null, {
-    params: { prompt_version_id, dataset_id }
+export const runExperiment = (prompt_version_ids, dataset_id) =>
+  API.post("/experiment/run", prompt_version_ids, {
+    params: { dataset_id }
   });

@@ -13,6 +13,7 @@ class Run(Base):
 
     experiment_id = Column(String, ForeignKey("experiments.id"), nullable=False)
     dataset_item_id = Column(String, ForeignKey("dataset_items.id"), nullable=False)
+    prompt_version_id = Column(String, ForeignKey("prompt_versions.id"), nullable=True)
 
     input = Column(JSON, nullable=False)
     output = Column(Text, nullable=True)

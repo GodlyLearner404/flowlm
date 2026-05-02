@@ -22,7 +22,7 @@ Only return a number.
 """
 
         try:
-            result = OpenRouterClient.generate(
+            result, _tokens = OpenRouterClient.generate(
                 prompt,
                 model="openai/gpt-4o-mini",
                 config={"max_tokens": 10, "temperature": 0}
