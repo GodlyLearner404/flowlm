@@ -6,7 +6,7 @@ from app.services.dataset_service import DatasetService, DatasetItemService
 from app.schemas.dataset_schema import DatasetCreate, DatasetItemCreate
 from app.models.dataset import Dataset
 from app.models.dataset_item import DatasetItem
-from backend.app.core.deps import get_current_user
+from app.core.deps import get_current_user
 
 router = APIRouter()
 

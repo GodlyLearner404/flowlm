@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import Login from "./Login";
+import Playground from "./Playground";
 import {
   addDatasetItem,
   createDataset,
@@ -10,6 +11,7 @@ import {
   getExperiments,
   getPrompts,
   getRuns,
+  getStoredToken,
   getSummary,
   getStatus,
   runExperiment
@@ -38,8 +40,12 @@ function truncate(value, limit = 300) {
   return value.length > limit ? `${value.slice(0, limit)}...` : value;
 }
 
+function getErrorMessage(error, fallback) {
+  return error.response?.data?.detail || fallback;
+}
+
 function App() {
-  const [token, setToken] = useState("");
+  const [token, setToken] = useState(() => getStoredToken());
   const [prompts, setPrompts] = useState([]);
   const [datasets, setDatasets] = useState([]);
   const [experiments, setExperiments] = useState([]);
@@ -67,11 +73,6 @@ function App() {
   const [expectedOutput, setExpectedOutput] = useState(defaultExpected);
 
   useEffect(() => {
-    const storedToken = localStorage.getItem("token") || "";
-    setToken(storedToken);
-  }, []);
-
-  useEffect(() => {
     if (token) {
       localStorage.setItem("token", token);
       return;
@@ -87,7 +88,19 @@ function App() {
     [prompts]
   );
 
+  const handleApiError = useCallback((error, fallback) => {
+    if (error.response?.status === 401) {
+      setToken("");
+      setMessage("Session expired. Please log in again.");
+      return;
+    }
+
+    setMessage(getErrorMessage(error, fallback));
+  }, []);
+
   const loadAll = useCallback(async () => {
+    if (!token) return;
+
     try {
       const [promptRes, datasetRes, experimentRes] = await Promise.all([
         getPrompts(),
@@ -113,11 +126,18 @@ function App() {
       if (!selectedDatasetId && firstDataset) setSelectedDatasetId(firstDataset.id);
       if (!selectedExperimentId && firstExperiment) setSelectedExperimentId(firstExperiment.experiment_id);
     } catch (error) {
-      setMessage(error.response?.data?.detail || "Could not load dashboard data.");
+      handleApiError(error, "Could not load dashboard data.");
     }
-  }, [selectedDatasetId, selectedExperimentId, selectedPromptId, selectedPromptVersionId]);
+  }, [
+    handleApiError,
+    selectedDatasetId,
+    selectedExperimentId,
+    selectedPromptId,
+    selectedPromptVersionId,
+    token
+  ]);
 
-  const loadRuns = async (experimentId) => {
+  const loadRuns = useCallback(async (experimentId) => {
     try {
       const [runsRes, summaryRes] = await Promise.all([
         getRuns(experimentId),
@@ -129,9 +149,9 @@ function App() {
     } catch (error) {
       setRuns([]);
       setSummary(null);
-      setMessage(error.response?.data?.detail || "Could not load experiment runs.");
+      handleApiError(error, "Could not load experiment runs.");
     }
-  };
+  }, [handleApiError]);
 
   useEffect(() => {
     loadAll();
@@ -142,8 +162,8 @@ function App() {
     loadRuns(selectedExperimentId);
     getStatus(selectedExperimentId)
       .then((res) => setStatus(res.data))
-      .catch((error) => setMessage(error.response?.data?.detail || "Could not load experiment status."));
-  }, [selectedExperimentId]);
+      .catch((error) => handleApiError(error, "Could not load experiment status."));
+  }, [handleApiError, loadRuns, selectedExperimentId]);
 
   useEffect(() => () => {
     if (intervalRef.current) {
@@ -162,7 +182,7 @@ function App() {
       await loadAll();
       setSelectedPromptId(promptRes.data.id);
     } catch (error) {
-      setMessage(error.response?.data?.detail || "Could not create prompt.");
+      handleApiError(error, "Could not create prompt.");
     } finally {
       setLoading(false);
     }
@@ -191,7 +211,7 @@ function App() {
       await loadAll();
       setSelectedPromptVersionId(versionRes.data.id);
     } catch (error) {
-      setMessage(error.response?.data?.detail || "Could not create prompt version.");
+      handleApiError(error, "Could not create prompt version.");
     } finally {
       setLoading(false);
     }
@@ -212,7 +232,7 @@ function App() {
       setMessage("Dataset created.");
       await loadAll();
     } catch (error) {
-      setMessage(error.response?.data?.detail || "Could not create dataset.");
+      handleApiError(error, "Could not create dataset.");
     } finally {
       setLoading(false);
     }
@@ -242,7 +262,7 @@ function App() {
       setMessage("Dataset item added.");
       await loadAll();
     } catch (error) {
-      setMessage(error.response?.data?.detail || "Could not add dataset item.");
+      handleApiError(error, "Could not add dataset item.");
     } finally {
       setLoading(false);
     }
@@ -264,7 +284,7 @@ function App() {
       setStatus(res.data);
       pollExperiment(experimentId);
     } catch (error) {
-      setMessage(error.response?.data?.detail || "Could not queue experiment. Is Redis/Celery running?");
+      handleApiError(error, "Could not queue experiment. Is Redis/Celery running?");
       setLoading(false);
     }
   };
@@ -291,7 +311,7 @@ function App() {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
         setLoading(false);
-        setMessage(error.response?.data?.detail || "Could not poll experiment status.");
+        handleApiError(error, "Could not poll experiment status.");
       }
     }, 2000);
   };
@@ -312,6 +332,13 @@ function App() {
 
   const handleLogout = () => {
     setToken("");
+    setPrompts([]);
+    setDatasets([]);
+    setExperiments([]);
+    setRuns([]);
+    setSummary(null);
+    setStatus(null);
+    setMessage("");
   };
 
   if (!token) {
@@ -331,6 +358,8 @@ function App() {
       </main>
     );
   }
+
+  return <Playground />;
 
   return (
     <main className="shell">

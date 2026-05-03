@@ -6,6 +6,9 @@ class ExecutionService:
 
     @staticmethod
     def run(prompt_version, input_data):
+        for var in prompt_version.variables:
+            if var not in input_data:
+                raise ValueError(f"Missing variable: {var}")
         # build final prompt
         final_prompt = PromptBuilder.build(
             prompt_version.template,

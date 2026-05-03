@@ -6,6 +6,7 @@ from app.api.dataset_routes import router as dataset_router
 from app.api.experiment_routes import router as experiment_router
 from app.api.analytics_routes import router as analytics_router
 from app.api.auth_routes import router as auth_router
+from app.api.playground_routes import router as playground_router
 
 app = FastAPI()
 
@@ -22,6 +23,7 @@ app.include_router(dataset_router)
 app.include_router(experiment_router)
 app.include_router(analytics_router)
 app.include_router(auth_router)
+app.include_router(playground_router)
 
 @app.get("/")
 def root():

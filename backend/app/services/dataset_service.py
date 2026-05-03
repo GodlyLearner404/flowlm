@@ -27,11 +27,12 @@ class DatasetItemService:
 class DatasetService:
 
     @staticmethod
-    def create_dataset(db: Session, name: str, description: str = None):
+    def create_dataset(db: Session, name: str, description: str = None, user_id: str = None):
         dataset = Dataset(
             id=str(uuid.uuid4()),
             name=name,
             description=description,
+            user_id=user_id,
             created_at=datetime.utcnow()
         )
 
