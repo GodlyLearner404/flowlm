@@ -8,6 +8,7 @@ from app.api.analytics_routes import router as analytics_router
 from app.api.auth_routes import router as auth_router
 from app.api.playground_routes import router as playground_router
 from app.api.deployment_routes import router as deployment_router
+from app.api.project_routes import router as project_router
 
 app = FastAPI()
 
@@ -26,6 +27,7 @@ app.include_router(analytics_router)
 app.include_router(auth_router)
 app.include_router(playground_router)
 app.include_router(deployment_router)
+app.include_router(project_router)
 
 @app.get("/")
 def root():

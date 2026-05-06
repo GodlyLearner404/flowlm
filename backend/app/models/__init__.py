@@ -6,3 +6,6 @@ from .dataset_item import DatasetItem
 from .experiment import Experiment
 from .run import Run
 from .user import User
+from .project import Project
+from .project_member import ProjectMember
+from .playground_run import PlaygroundRun
