@@ -18,13 +18,14 @@ router = APIRouter()
 def run_experiment(
     prompt_version_ids: list[str],
     dataset_id: str,
+    project_id: str,
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user)
 ):
     # 🔥 Validate ALL prompt versions
-    prompt_versions = db.query(PromptVersion).filter(
-        PromptVersion.id.in_(prompt_version_ids)
-    ).all()
+    prompt_versions = ExperimentService.get_prompt_versions_for_project(
+        db, prompt_version_ids, project_id, user_id
+    )
 
     if len(prompt_versions) != len(prompt_version_ids):
         raise HTTPException(status_code=404, detail="One or more prompt versions are invalid")
@@ -41,28 +42,31 @@ def run_experiment(
             detail=f"Invalid OpenRouter model id: {invalid_models[0]}"
         )
 
-    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
-
-    if not dataset:
-        raise HTTPException(status_code=404, detail="Invalid dataset")
-
     # create experiment
     experiment = ExperimentService.create_experiment(
-        db, prompt_version_ids, dataset_id, user_id
+        db, prompt_version_ids, dataset_id, user_id, project_id
     )
+
+    if not experiment:
+        raise HTTPException(status_code=404, detail="Invalid project resources")
 
     # send task to Celery
     run_experiment_task.delay(experiment.id)
 
     return {
         "experiment_id": experiment.id,
+        "project_id": experiment.project_id,
         "status": "queued"
     }
 
 
 @router.get("/experiment/{experiment_id}/status")
-def get_experiment_status(experiment_id: str, db: Session = Depends(get_db)):
-    experiment = db.query(Experiment).filter(Experiment.id == experiment_id).first()
+def get_experiment_status(
+    experiment_id: str,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user)
+):
+    experiment = ExperimentService.get_experiment_for_user(db, experiment_id, user_id)
 
     if not experiment:
         raise HTTPException(status_code=404, detail="Experiment not found")
@@ -85,9 +89,10 @@ def get_experiment_runs(
     experiment_id: str,
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user)
 ):
-    experiment = db.query(Experiment).filter(Experiment.id == experiment_id).first()
+    experiment = ExperimentService.get_experiment_for_user(db, experiment_id, user_id)
 
     if not experiment:
         raise HTTPException(status_code=404, detail="Experiment not found")

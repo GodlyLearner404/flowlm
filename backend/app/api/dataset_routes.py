@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.database import get_db
@@ -12,12 +12,21 @@ router = APIRouter()
 
 
 @router.post("/dataset")
-def create_dataset(req: DatasetCreate, db: Session = Depends(get_db), user_id: str = Depends(get_current_user)):
-    dataset = DatasetService.create_dataset(db, req.name, req.description, user_id)
+def create_dataset(
+    req: DatasetCreate,
+    project_id: str,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user)
+):
+    dataset = DatasetService.create_dataset(db, req.name, req.description, user_id, project_id)
+
+    if not dataset:
+        raise HTTPException(status_code=403, detail="Project access denied")
 
     return {
         "id": dataset.id,
-        "name": dataset.name
+        "name": dataset.name,
+        "project_id": dataset.project_id
     }
 
 
@@ -29,9 +38,8 @@ def list_datasets(
     user_id: str = Depends(get_current_user)
 ):
     datasets = (
-        db.query(Dataset)
+        DatasetService.get_user_datasets(db, user_id)
         .options(joinedload(Dataset.items))
-        .filter(Dataset.user_id == user_id)  # 🔥 FILTER BY USER
         .offset(offset)
         .limit(limit)
         .all()
@@ -40,6 +48,7 @@ def list_datasets(
     return [
         {
             "id": dataset.id,
+            "project_id": dataset.project_id,
             "name": dataset.name,
             "description": dataset.description,
             "items": [
@@ -59,14 +68,19 @@ def list_datasets(
 def add_dataset_item(
     dataset_id: str,
     req: DatasetItemCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user)
 ):
     item = DatasetItemService.add_item(
         db,
         dataset_id,
         req.input,
-        req.expected_output
+        req.expected_output,
+        user_id
     )
+
+    if not item:
+        raise HTTPException(status_code=404, detail="Dataset not found")
 
     return {
         "id": item.id,
@@ -79,8 +93,14 @@ def list_dataset_items(
     dataset_id: str,
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user)
 ):
+    dataset = DatasetService.get_dataset_for_user(db, dataset_id, user_id)
+
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
     items = (
         db.query(DatasetItem)
         .filter(DatasetItem.dataset_id == dataset_id)

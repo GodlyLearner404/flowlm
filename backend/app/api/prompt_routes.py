@@ -16,16 +16,21 @@ router = APIRouter()
 @router.post("/prompt")
 def create_prompt(
     name: str,
+    project_id: str,
     description: str = None,
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user)   # 🔥 ADD THIS
 ):
-    prompt = PromptService.create_prompt(db, name, description, user_id)
+    prompt = PromptService.create_prompt(db, name, description, user_id, project_id)
+
+    if not prompt:
+        raise HTTPException(status_code=403, detail="Project access denied")
 
     return {
         "id": prompt.id,
         "name": prompt.name,
-        "description": prompt.description
+        "description": prompt.description,
+        "project_id": prompt.project_id
     }
 
 
@@ -37,9 +42,8 @@ def list_prompts(
     user_id: str = Depends(get_current_user)
 ):
     prompts = (
-        db.query(Prompt)
+        PromptService.get_user_prompts(db, user_id)
         .options(joinedload(Prompt.versions))
-        .filter(Prompt.user_id == user_id)
         .offset(offset)
         .limit(limit)
         .all()
@@ -48,6 +52,7 @@ def list_prompts(
     return [
         {
             "id": prompt.id,
+            "project_id": prompt.project_id,
             "name": prompt.name,
             "description": prompt.description,
             "versions": [
@@ -69,8 +74,14 @@ def list_prompts(
 def create_prompt_version(
     prompt_id: str,
     req: PromptVersionCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user)
 ):
+    prompt = PromptService.get_prompt_for_user(db, prompt_id, user_id)
+
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+
     version = PromptVersionService.create_version(
         db,
         prompt_id,
@@ -91,9 +102,15 @@ def create_prompt_version(
 def list_prompt_versions(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user)
 ):
-    versions = db.query(PromptVersion).offset(offset).limit(limit).all()
+    versions = (
+        PromptService.get_user_prompt_versions(db, user_id)
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
 
     return [
         {
@@ -109,8 +126,13 @@ def list_prompt_versions(
     ]
 
 @router.post("/test-run/{version_id}")
-def test_run(version_id: str, input_data: dict, db: Session = Depends(get_db)):
-    version = db.query(PromptVersion).filter(PromptVersion.id == version_id).first()
+def test_run(
+    version_id: str,
+    input_data: dict,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user)
+):
+    version = PromptService.get_prompt_version_for_user(db, version_id, user_id)
 
     if not version:
         raise HTTPException(status_code=404, detail="Prompt version not found")
@@ -133,10 +155,7 @@ def run_production(
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user)
 ):
-    prompt = db.query(Prompt).filter(
-        Prompt.id == prompt_id,
-        Prompt.user_id == user_id
-    ).first()
+    prompt = PromptService.get_prompt_for_user(db, prompt_id, user_id)
 
     if not prompt:
         raise HTTPException(status_code=404, detail="Prompt not found")

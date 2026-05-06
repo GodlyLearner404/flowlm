@@ -1,8 +1,11 @@
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
 from app.models.experiment import Experiment
+from app.models.dataset import Dataset
 from app.models.dataset_item import DatasetItem
+from app.models.prompt import Prompt
 from app.models.prompt_version import PromptVersion
+from app.models.project_member import ProjectMember
 from app.models.run import Run
 from app.services.execution_service import ExecutionService
 from app.evaluation.simple_evaluator import SimpleEvaluator
@@ -18,6 +21,28 @@ def estimate_cost(tokens):
     return tokens * 0.0000005   # rough estimate
 
 class ExperimentService:
+
+    @staticmethod
+    def user_is_project_member(db: Session, project_id: str, user_id: str):
+        return db.query(ProjectMember).filter(
+            ProjectMember.project_id == project_id,
+            ProjectMember.user_id == user_id
+        ).first() is not None
+
+    @staticmethod
+    def get_prompt_versions_for_project(db: Session, prompt_version_ids: list[str], project_id: str, user_id: str):
+        if not ExperimentService.user_is_project_member(db, project_id, user_id):
+            return []
+
+        return (
+            db.query(PromptVersion)
+            .join(Prompt, Prompt.id == PromptVersion.prompt_id)
+            .filter(
+                PromptVersion.id.in_(prompt_version_ids),
+                Prompt.project_id == project_id
+            )
+            .all()
+        )
 
     @staticmethod
     def run_experiment(db: Session, prompt_version_id: str, dataset_id: str):
@@ -47,7 +72,7 @@ class ExperimentService:
 
         for item in dataset_items:
             # run LLM
-            final_prompt, output, tokens = ExecutionService.run(prompt_version, item.input)
+            final_prompt, output, tokens, finish_reason, latency_ms = ExecutionService.run(prompt_version, item.input)
 
             # score
             # score = SimpleEvaluator.score(output, item.expected_output)
@@ -121,7 +146,7 @@ class ExperimentService:
 
                 for item in dataset_items:
 
-                    final_prompt, output, tokens = ExecutionService.run(
+                    final_prompt, output, tokens, finish_reason, latency_ms = ExecutionService.run(
                         prompt_version,
                         item.input
                     )
@@ -183,13 +208,38 @@ class ExperimentService:
             db.close()
 
     @staticmethod
-    def create_experiment(db, prompt_version_ids, dataset_id, user_id):
+    def create_experiment(db, prompt_version_ids, dataset_id, user_id, project_id):
+        if not ExperimentService.user_is_project_member(db, project_id, user_id):
+            return None
+
+        dataset = db.query(Dataset).filter(
+            Dataset.id == dataset_id,
+            Dataset.project_id == project_id
+        ).first()
+
+        if not dataset:
+            return None
+
+        prompt_versions = (
+            db.query(PromptVersion)
+            .join(Prompt, Prompt.id == PromptVersion.prompt_id)
+            .filter(
+                PromptVersion.id.in_(prompt_version_ids),
+                Prompt.project_id == project_id
+            )
+            .all()
+        )
+
+        if len(prompt_versions) != len(prompt_version_ids):
+            return None
+
         experiment = Experiment(
             id=str(uuid.uuid4()),
             prompt_version_id=prompt_version_ids[0],
             prompt_version_ids=prompt_version_ids,
             dataset_id=dataset_id,
             user_id=user_id,
+            project_id=project_id,
             status="pending",
             created_at=datetime.utcnow()
         )
@@ -199,4 +249,16 @@ class ExperimentService:
         db.refresh(experiment)
 
         return experiment
+
+    @staticmethod
+    def get_experiment_for_user(db: Session, experiment_id: str, user_id: str):
+        return (
+            db.query(Experiment)
+            .join(ProjectMember, ProjectMember.project_id == Experiment.project_id)
+            .filter(
+                Experiment.id == experiment_id,
+                ProjectMember.user_id == user_id
+            )
+            .first()
+        )
     
