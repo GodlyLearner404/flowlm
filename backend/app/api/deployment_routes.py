@@ -6,6 +6,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.prompt import Prompt
 from app.models.prompt_version import PromptVersion
+from app.services.project_service import ProjectService
 
 router = APIRouter()
 
@@ -17,12 +18,14 @@ class DeployRequest(BaseModel):
 
 def _get_prompt_version(db: Session, prompt_id: str, version_id: str, user_id: str):
     prompt = db.query(Prompt).filter(
-        Prompt.id == prompt_id,
-        Prompt.user_id == user_id
+        Prompt.id == prompt_id
     ).first()
 
     if not prompt:
         raise HTTPException(status_code=404, detail="Prompt not found")
+
+    if not ProjectService.is_project_member(db, prompt.project_id, user_id):
+        raise HTTPException(status_code=403, detail="Project access denied")
 
     version = db.query(PromptVersion).filter(
         PromptVersion.id == version_id,
@@ -42,6 +45,10 @@ def deploy_production(
     user_id: str = Depends(get_current_user)
 ):
     prompt, _ = _get_prompt_version(db, req.prompt_id, req.version_id, user_id)
+
+    if not ProjectService.is_project_admin(db, prompt.project_id, user_id):
+        raise HTTPException(status_code=403, detail="Project access denied")
+
     prompt.production_version_id = req.version_id
     db.commit()
 
@@ -55,6 +62,10 @@ def deploy_staging(
     user_id: str = Depends(get_current_user)
 ):
     prompt, _ = _get_prompt_version(db, req.prompt_id, req.version_id, user_id)
+
+    if not ProjectService.is_project_admin(db, prompt.project_id, user_id):
+        raise HTTPException(status_code=403, detail="Project access denied")
+
     prompt.staging_version_id = req.version_id
     db.commit()
 
@@ -68,12 +79,14 @@ def get_deployment(
     user_id: str = Depends(get_current_user)
 ):
     prompt = db.query(Prompt).filter(
-        Prompt.id == prompt_id,
-        Prompt.user_id == user_id
+        Prompt.id == prompt_id
     ).first()
 
     if not prompt:
         raise HTTPException(status_code=404, detail="Prompt not found")
+
+    if not ProjectService.is_project_member(db, prompt.project_id, user_id):
+        raise HTTPException(status_code=403, detail="Project access denied")
 
     return {
         "production_version_id": prompt.production_version_id,

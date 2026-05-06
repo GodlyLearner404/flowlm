@@ -13,6 +13,11 @@ class ProjectCreate(BaseModel):
     name: str
 
 
+class ProjectMemberCreate(BaseModel):
+    user_id: str
+    role: str
+
+
 def _serialize_project(project):
     return {
         "id": project.id,
@@ -47,10 +52,13 @@ def get_project(
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user)
 ):
-    project = ProjectService.get_project_by_id(db, project_id, user_id)
+    project = ProjectService.get_project(db, project_id)
 
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+
+    if not ProjectService.is_project_member(db, project_id, user_id):
+        raise HTTPException(status_code=403, detail="Project access denied")
 
     members = ProjectService.list_members(db, project.id)
 
@@ -65,3 +73,47 @@ def get_project(
     ]
 
     return data
+
+
+@router.post("/projects/{project_id}/members")
+def add_member(
+    project_id: str,
+    req: ProjectMemberCreate,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user)
+):
+    member = ProjectService.add_member(db, project_id, user_id, req.user_id, req.role)
+
+    if not member:
+        raise HTTPException(status_code=403, detail="Project access denied")
+
+    return {
+        "user_id": member.user_id,
+        "role": member.role,
+        "created_at": member.created_at
+    }
+
+
+@router.delete("/projects/{project_id}/members/{member_user_id}")
+def remove_member(
+    project_id: str,
+    member_user_id: str,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user)
+):
+    if not ProjectService.remove_member(db, project_id, user_id, member_user_id):
+        raise HTTPException(status_code=403, detail="Project access denied")
+
+    return {"status": "removed"}
+
+
+@router.delete("/projects/{project_id}")
+def delete_project(
+    project_id: str,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user)
+):
+    if not ProjectService.delete_project(db, project_id, user_id):
+        raise HTTPException(status_code=403, detail="Project access denied")
+
+    return {"status": "deleted"}

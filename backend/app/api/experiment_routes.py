@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.services.experiment_service import ExperimentService
+from app.services.project_service import ProjectService
 from app.tasks.experiment_tasks import run_experiment_task
 from app.models.dataset import Dataset
 from app.models.experiment import Experiment
@@ -22,6 +23,9 @@ def run_experiment(
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user)
 ):
+    if not ProjectService.is_project_member(db, project_id, user_id):
+        raise HTTPException(status_code=403, detail="Project access denied")
+
     # 🔥 Validate ALL prompt versions
     prompt_versions = ExperimentService.get_prompt_versions_for_project(
         db, prompt_version_ids, project_id, user_id
@@ -66,6 +70,11 @@ def get_experiment_status(
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user)
 ):
+    existing_experiment = db.query(Experiment).filter(Experiment.id == experiment_id).first()
+
+    if existing_experiment and not ProjectService.is_project_member(db, existing_experiment.project_id, user_id):
+        raise HTTPException(status_code=403, detail="Project access denied")
+
     experiment = ExperimentService.get_experiment_for_user(db, experiment_id, user_id)
 
     if not experiment:
@@ -92,6 +101,11 @@ def get_experiment_runs(
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user)
 ):
+    existing_experiment = db.query(Experiment).filter(Experiment.id == experiment_id).first()
+
+    if existing_experiment and not ProjectService.is_project_member(db, existing_experiment.project_id, user_id):
+        raise HTTPException(status_code=403, detail="Project access denied")
+
     experiment = ExperimentService.get_experiment_for_user(db, experiment_id, user_id)
 
     if not experiment:

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 
 from app.services.prompt_service import PromptService
+from app.services.project_service import ProjectService
 from app.schemas.prompt_version_schema import PromptVersionCreate
 from app.services.prompt_version_service import PromptVersionService
 from app.core.database import get_db
@@ -21,6 +22,9 @@ def create_prompt(
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user)   # 🔥 ADD THIS
 ):
+    if not ProjectService.is_project_member(db, project_id, user_id):
+        raise HTTPException(status_code=403, detail="Project access denied")
+
     prompt = PromptService.create_prompt(db, name, description, user_id, project_id)
 
     if not prompt:
@@ -77,6 +81,14 @@ def create_prompt_version(
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user)
 ):
+    existing_prompt = db.query(Prompt).filter(Prompt.id == prompt_id).first()
+
+    if not existing_prompt:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+
+    if not ProjectService.is_project_member(db, existing_prompt.project_id, user_id):
+        raise HTTPException(status_code=403, detail="Project access denied")
+
     prompt = PromptService.get_prompt_for_user(db, prompt_id, user_id)
 
     if not prompt:
@@ -132,6 +144,16 @@ def test_run(
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user)
 ):
+    existing_version = db.query(PromptVersion).filter(PromptVersion.id == version_id).first()
+
+    if not existing_version:
+        raise HTTPException(status_code=404, detail="Prompt version not found")
+
+    prompt = db.query(Prompt).filter(Prompt.id == existing_version.prompt_id).first()
+
+    if prompt and not ProjectService.is_project_member(db, prompt.project_id, user_id):
+        raise HTTPException(status_code=403, detail="Project access denied")
+
     version = PromptService.get_prompt_version_for_user(db, version_id, user_id)
 
     if not version:
@@ -155,10 +177,13 @@ def run_production(
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user)
 ):
-    prompt = PromptService.get_prompt_for_user(db, prompt_id, user_id)
+    prompt = db.query(Prompt).filter(Prompt.id == prompt_id).first()
 
     if not prompt:
         raise HTTPException(status_code=404, detail="Prompt not found")
+
+    if not ProjectService.is_project_member(db, prompt.project_id, user_id):
+        raise HTTPException(status_code=403, detail="Project access denied")
 
     if not prompt.production_version_id:
         raise HTTPException(status_code=404, detail="Production version not deployed")

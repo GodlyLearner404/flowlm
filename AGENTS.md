@@ -34,6 +34,9 @@ FlowLM is split into a FastAPI backend and React frontend.
 - Do not change public API contracts unless the task requires it.
 - Do not remove user changes or unrelated work in a dirty worktree.
 - If a change requires touching an unrequested file, make the reason explicit.
+- Prefer focused, architecture-preserving changes.
+- You may introduce small helper functions, local refactors, and implementation improvements when they materially improve correctness or maintainability.
+- Avoid broad rewrites or unrelated refactors unless explicitly requested.
 
 ## Database Conventions
 
