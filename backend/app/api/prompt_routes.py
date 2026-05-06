@@ -115,9 +115,48 @@ def test_run(version_id: str, input_data: dict, db: Session = Depends(get_db)):
     if not version:
         raise HTTPException(status_code=404, detail="Prompt version not found")
 
-    final_prompt, output = ExecutionService.run(version, input_data)
+    final_prompt, output, tokens, finish_reason, latency_ms = ExecutionService.run(version, input_data)
 
     return {
         "prompt": final_prompt,
-        "output": output
+        "output": output,
+        "tokens": tokens,
+        "finish_reason": finish_reason,
+        "latency_ms": latency_ms
+    }
+
+
+@router.post("/production/run/{prompt_id}")
+def run_production(
+    prompt_id: str,
+    input_data: dict,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user)
+):
+    prompt = db.query(Prompt).filter(
+        Prompt.id == prompt_id,
+        Prompt.user_id == user_id
+    ).first()
+
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+
+    if not prompt.production_version_id:
+        raise HTTPException(status_code=404, detail="Production version not deployed")
+
+    version = db.query(PromptVersion).filter(
+        PromptVersion.id == prompt.production_version_id,
+        PromptVersion.prompt_id == prompt.id
+    ).first()
+
+    if not version:
+        raise HTTPException(status_code=404, detail="Production version not found")
+
+    _, output, tokens, finish_reason, latency_ms = ExecutionService.run(version, input_data)
+
+    return {
+        "output": output,
+        "tokens": tokens,
+        "finish_reason": finish_reason,
+        "latency_ms": latency_ms
     }
