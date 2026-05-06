@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -28,7 +28,7 @@ def create_project(
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user)
 ):
-    project = ProjectService.create_project(db, req.name, user_id)
+    project = ProjectService.create_project(db, user_id, req.name)
     return _serialize_project(project)
 
 
@@ -37,7 +37,7 @@ def list_projects(
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user)
 ):
-    projects = ProjectService.list_projects(db, user_id)
+    projects = ProjectService.get_user_projects(db, user_id)
     return [_serialize_project(project) for project in projects]
 
 
@@ -47,7 +47,11 @@ def get_project(
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user)
 ):
-    project = ProjectService.get_project(db, project_id, user_id)
+    project = ProjectService.get_project_by_id(db, project_id, user_id)
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
     members = ProjectService.list_members(db, project.id)
 
     data = _serialize_project(project)

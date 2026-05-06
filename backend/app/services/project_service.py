@@ -1,4 +1,3 @@
-from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.models.project import Project
@@ -8,7 +7,7 @@ from app.models.project_member import ProjectMember
 class ProjectService:
 
     @staticmethod
-    def create_project(db: Session, name: str, user_id: str):
+    def create_project(db: Session, user_id: str, name: str):
         project = Project(name=name, owner_user_id=user_id)
         db.add(project)
         db.flush()
@@ -25,7 +24,7 @@ class ProjectService:
         return project
 
     @staticmethod
-    def list_projects(db: Session, user_id: str):
+    def get_user_projects(db: Session, user_id: str):
         return (
             db.query(Project)
             .join(ProjectMember, ProjectMember.project_id == Project.id)
@@ -34,8 +33,8 @@ class ProjectService:
         )
 
     @staticmethod
-    def get_project(db: Session, project_id: str, user_id: str):
-        project = (
+    def get_project_by_id(db: Session, project_id: str, user_id: str):
+        return (
             db.query(Project)
             .join(ProjectMember, ProjectMember.project_id == Project.id)
             .filter(
@@ -44,11 +43,6 @@ class ProjectService:
             )
             .first()
         )
-
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
-
-        return project
 
     @staticmethod
     def list_members(db: Session, project_id: str):
