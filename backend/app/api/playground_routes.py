@@ -13,6 +13,7 @@ from pydantic import BaseModel
 class PlaygroundRequest(BaseModel):
     version_id: str
     input_data: dict
+    models: list[str] | None = None
 
 @router.post("/playground/run")
 def run_playground(
@@ -27,15 +28,36 @@ def run_playground(
 
     if not version:
         return {"error": "Invalid version"}
+    
+    results = []
+    final_prompt = ExecutionService.build_final_prompt(version, req.input_data)
 
-    # 🔥 run instantly (no celery)
-    final_prompt, output, tokens = ExecutionService.run(
-        version,
-        req.input_data
-    )
+    models = req.models if req.models else [version.model]
+
+    for model in models:
+        try:
+            final_prompt, output, tokens, finish_reason, latency_ms = ExecutionService.run(
+                version,
+                req.input_data,
+                override_model=model
+            )
+
+            results.append({
+                "model": model,
+                "status": "completed",
+                "output": output,
+                "tokens": tokens,
+                "finish_reason": finish_reason,
+                "latency_ms": latency_ms
+            })
+        except Exception as error:
+            results.append({
+                "model": model,
+                "status": "failed",
+                "output": str(error)
+            })
 
     return {
         "prompt": final_prompt,
-        "output": output,
-        "tokens": tokens
+        "results": results
     }

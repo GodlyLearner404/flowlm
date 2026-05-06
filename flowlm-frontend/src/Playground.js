@@ -2,97 +2,140 @@ import React, { useEffect, useState } from "react";
 import { runPlayground, getPromptVersions } from "./api";
 
 function Playground() {
-  const [versions, setVersions] = useState([]);
-  const [selectedVersion, setSelectedVersion] = useState(null);
-  const [inputs, setInputs] = useState({});
-  const [output, setOutput] = useState("");
-  const [loading, setLoading] = useState(false);
+    const [versions, setVersions] = useState([]);
+    const [selectedVersion, setSelectedVersion] = useState(null);
+    const [inputs, setInputs] = useState({});
+    const [loading, setLoading] = useState(false);
+    const [selectedModels, setSelectedModels] = useState([]);
+    const [results, setResults] = useState([]);
 
-  useEffect(() => {
-    loadVersions();
-  }, []);
+    useEffect(() => {
+        loadVersions();
+    }, []);
 
-  const loadVersions = async () => {
-    const res = await getPromptVersions();
-    setVersions(res.data);
-  };
+    const loadVersions = async () => {
+        const res = await getPromptVersions();
+        setVersions(res.data);
+    };
 
-  const handleSelect = (id) => {
-    const v = versions.find((x) => x.id === id);
-    setSelectedVersion(v);
+    const modelOptions = [
+        "deepseek/deepseek-r1-distill-llama-70b",
+        "ibm-granite/granite-4.1-8b",
+        "openai/gpt-oss-20b:free"
+    ];
 
-    // initialize inputs
-    const initial = {};
-    v.variables.forEach((varName) => {
-      initial[varName] = "";
-    });
+    const handleSelect = (id) => {
+        const v = versions.find((x) => x.id === id);
+        setSelectedVersion(v);
 
-    setInputs(initial);
-  };
+        // initialize inputs
+        const initial = {};
+        v.variables.forEach((varName) => {
+        initial[varName] = "";
+        });
 
-  const handleRun = async () => {
-    setLoading(true);
+        setInputs(initial);
+    };
 
-    try {
-      const res = await runPlayground(selectedVersion.id, inputs);
-      setOutput(res.data.output);
-    } catch (err) {
-      setOutput("Error running prompt");
-    }
+    const handleRun = async () => {
+        setLoading(true);
 
-    setLoading(false);
-  };
+        try {
+            const res = await runPlayground(
+                selectedVersion.id,
+                inputs,
+                selectedModels
+            );
+            setResults(res.data.results);
+        } catch (err) {
+            setResults([{
+                model: "playground",
+                status: "failed",
+                output: "Error running prompt"
+            }]);
+        }
+
+        setLoading(false);
+    };
 
   return (
     <div style={{ padding: 20 }}>
-      <h2>Prompt Playground</h2>
+        <h2>Prompt Playground</h2>
 
-      {/* 🔥 Select version */}
-      <select onChange={(e) => handleSelect(e.target.value)}>
-        <option>Select Prompt Version</option>
-        {versions.map((v) => (
-          <option key={v.id} value={v.id}>
-            {v.id}
-          </option>
-        ))}
-      </select>
+        {/* 🔥 Select version */}
+        <select onChange={(e) => handleSelect(e.target.value)}>
+            <option>Select Prompt Version</option>
+            {versions.map((v) => (
+            <option key={v.id} value={v.id}>
+                {v.id}
+            </option>
+            ))}
+        </select>
 
-      {/* 🔥 Show template */}
-      {selectedVersion && (
-        <>
-          <h4>Template:</h4>
-          <pre>{selectedVersion.template}</pre>
-
-          {/* 🔥 Dynamic inputs */}
-          <h4>Inputs:</h4>
-          {selectedVersion.variables.map((varName) => (
+        <h4>Select Models:</h4>
+        {modelOptions.map((m) => (
+        <label key={m}>
             <input
-              key={varName}
-              placeholder={varName}
-              value={inputs[varName]}
-              onChange={(e) =>
-                setInputs({ ...inputs, [varName]: e.target.value })
-              }
+            type="checkbox"
+            value={m}
+            onChange={(e) => {
+                if (e.target.checked) {
+                setSelectedModels([...selectedModels, m]);
+                } else {
+                setSelectedModels(selectedModels.filter(x => x !== m));
+                }
+            }}
             />
-          ))}
-        </>
-      )}
+            {m}
+        </label>
+        ))}
 
-      <br /><br />
+        {/* 🔥 Show template */}
+        {selectedVersion && (
+            <>
+            <h4>Template:</h4>
+            <pre>{selectedVersion.template}</pre>
 
-      <button onClick={handleRun} disabled={loading || !selectedVersion}>
-        {loading ? "Running..." : "Run"}
-      </button>
+            {/* 🔥 Dynamic inputs */}
+            <h4>Inputs:</h4>
+            {selectedVersion.variables.map((varName) => (
+                <input
+                key={varName}
+                placeholder={varName}
+                value={inputs[varName]}
+                onChange={(e) =>
+                    setInputs({ ...inputs, [varName]: e.target.value })
+                }
+                />
+            ))}
+            </>
+        )}
 
-      <h3>Output:</h3>
-      <pre
-        style={{
-          backgroundColor: "#f4f4f4",
-          border: "1px solid #ccc",
-          padding: 8,
-          height: 40
-        }}
-      >{output}</pre>
+        <br /><br />
+
+        <button onClick={handleRun} disabled={loading || !selectedVersion}>
+            {loading ? "Running..." : "Run"}
+        </button>
+
+        <h3>Results:</h3>
+        {results.map((r) => (
+            <div
+                key={r.model}
+                style={{ border: "1px solid gray", margin: 10, padding: 10 }}
+            >
+                <h4>{r.model}</h4>
+                <p>Status: {r.status || "completed"}</p>
+                <pre>{r.output}</pre>
+                {r.finish_reason === "length" && (
+                    <p style={{ color: "#b45309", fontWeight: 600 }}>
+                        ⚠️ Response may have been truncated due to token limit
+                    </p>
+                )}
+                <p>Tokens: {r.tokens}</p>
+                <p>Finish Reason: {r.finish_reason || "n/a"}</p>
+                <p>Latency: {r.latency_ms != null ? `${r.latency_ms} ms` : "n/a"}</p>
+            </div>
+        ))}
     </div>
   );
 }

@@ -28,10 +28,11 @@ export const login = (email, password) =>
     params: { email, password }
   });
 
-export const runPlayground = (version_id, input_data) =>
+export const runPlayground = (version_id, input_data, models) =>
   API.post("/playground/run", {
     version_id,
-    input_data
+    input_data,
+    models
   });
 
 API.interceptors.request.use((config) => {
