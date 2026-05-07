@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
+from datetime import datetime
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.models.project_api_key import ProjectApiKey
 from app.services.project_service import ProjectService
 
 router = APIRouter()
@@ -64,7 +66,19 @@ def revoke_project_api_key(
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user)
 ):
-    if not ProjectService.revoke_api_key(db, project_id, key_id, user_id):
+    if not ProjectService.is_project_admin(db, project_id, user_id):
         raise HTTPException(status_code=403, detail="Project access denied")
+
+    api_key = db.query(ProjectApiKey).filter(
+        ProjectApiKey.id == key_id,
+        ProjectApiKey.project_id == project_id,
+        ProjectApiKey.revoked_at.is_(None)
+    ).first()
+
+    if not api_key:
+        raise HTTPException(status_code=403, detail="Project access denied")
+
+    api_key.revoked_at = datetime.utcnow()
+    db.commit()
 
     return {"status": "revoked"}

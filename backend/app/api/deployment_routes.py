@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user_or_api_key
 from app.models.prompt import Prompt
 from app.models.prompt_version import PromptVersion
 from app.services.project_service import ProjectService
@@ -41,8 +41,9 @@ def _get_prompt_version(db: Session, prompt_id: str, version_id: str, user_id: s
 @router.post("/deploy/production")
 def deploy_production(
     req: DeployRequest,
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
     db: Session = Depends(get_db),
-    user_id: str = Depends(get_current_user)
+    user_id: str = Depends(get_current_user_or_api_key)
 ):
     prompt, _ = _get_prompt_version(db, req.prompt_id, req.version_id, user_id)
 
@@ -58,8 +59,9 @@ def deploy_production(
 @router.post("/deploy/staging")
 def deploy_staging(
     req: DeployRequest,
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
     db: Session = Depends(get_db),
-    user_id: str = Depends(get_current_user)
+    user_id: str = Depends(get_current_user_or_api_key)
 ):
     prompt, _ = _get_prompt_version(db, req.prompt_id, req.version_id, user_id)
 
@@ -75,8 +77,9 @@ def deploy_staging(
 @router.get("/deploy/{prompt_id}")
 def get_deployment(
     prompt_id: str,
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
     db: Session = Depends(get_db),
-    user_id: str = Depends(get_current_user)
+    user_id: str = Depends(get_current_user_or_api_key)
 ):
     prompt = db.query(Prompt).filter(
         Prompt.id == prompt_id

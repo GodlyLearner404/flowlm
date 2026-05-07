@@ -5,6 +5,16 @@ from app.llm.prompt_builder import PromptBuilder
 class ExecutionService:
 
     @staticmethod
+    def run_prompt(prompt: str, model: str, config: dict | None = None):
+        output, tokens, finish_reason, latency_ms = OpenRouterClient.generate(
+            prompt,
+            model,
+            config or {}
+        )
+
+        return output, tokens, finish_reason, latency_ms
+
+    @staticmethod
     def build_final_prompt(prompt_version, input_data):
         for var in prompt_version.variables:
             if var not in input_data:
@@ -24,7 +34,7 @@ class ExecutionService:
 
         model = override_model if override_model else prompt_version.model
 
-        output, tokens, finish_reason, latency_ms = OpenRouterClient.generate(
+        output, tokens, finish_reason, latency_ms = ExecutionService.run_prompt(
             final_prompt,
             model,
             prompt_version.config or {}

@@ -10,6 +10,7 @@ from app.api.playground_routes import router as playground_router
 from app.api.deployment_routes import router as deployment_router
 from app.api.project_routes import router as project_router
 from app.api.api_key_routes import router as api_key_router
+from app.api.evaluation_routes import router as evaluation_router
 
 app = FastAPI()
 
@@ -30,6 +31,7 @@ app.include_router(playground_router)
 app.include_router(deployment_router)
 app.include_router(project_router)
 app.include_router(api_key_router)
+app.include_router(evaluation_router)
 
 @app.get("/")
 def root():

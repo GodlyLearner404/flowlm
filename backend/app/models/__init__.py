@@ -10,3 +10,5 @@ from .project import Project
 from .project_member import ProjectMember
 from .playground_run import PlaygroundRun
 from .project_api_key import ProjectApiKey
+from .evaluator import Evaluator
+from .evaluation import Evaluation

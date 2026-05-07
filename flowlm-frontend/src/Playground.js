@@ -19,8 +19,8 @@ function Playground() {
     };
 
     const modelOptions = [
-        "deepseek/deepseek-r1-distill-llama-70b",
-        "ibm-granite/granite-4.1-8b",
+        "tencent/hy3-preview:free",
+        "qwen/qwen3-next-80b-a3b-instruct:free",
         "openai/gpt-oss-20b:free"
     ];
 

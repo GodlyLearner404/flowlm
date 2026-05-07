@@ -42,3 +42,29 @@ def get_current_user(
         raise HTTPException(401, "Invalid token")
 
     raise HTTPException(401, "Invalid token")
+
+
+def get_current_user_or_api_key(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+    db: Session = Depends(get_db)
+):
+    try:
+        if credentials:
+            token = credentials.credentials
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            return payload["sub"]  # user_id
+
+        if x_api_key:
+            api_key = verify_api_key(db, x_api_key)
+
+            if not api_key:
+                raise HTTPException(401, "Invalid token")
+
+            return ProjectService.build_api_key_principal(api_key.project_id, api_key.id)
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(401, "Invalid token")
+
+    raise HTTPException(401, "Invalid token")

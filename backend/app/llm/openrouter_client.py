@@ -13,12 +13,12 @@ client = OpenAI(
 class OpenRouterClient:
 
     @staticmethod
-    def generate(prompt: str, model: str, config: dict):
+    def generate(prompt: str, model: str, config: dict | None = None, messages: list[dict] | None = None):
         safe_config = dict(config or {})
 
         max_tokens = safe_config.get("max_tokens", 550)
 
-        # 🔥 HARD LIMIT (based on your credits)
+        # Hard limit based on available credits
         if "free" in model.lower():
             max_tokens = min(max_tokens, 400)
         else:
@@ -26,13 +26,15 @@ class OpenRouterClient:
 
         safe_config["max_tokens"] = max_tokens
 
+        request_messages = messages if messages is not None else [
+            {"role": "user", "content": prompt}
+        ]
+
         start_time = time.time()
         response = client.chat.completions.create(
             model=model,
-            messages=[
-                {"role": "user", "content": prompt}
-            ],
-            **safe_config   # ✅ THIS IS THE FIX
+            messages=request_messages,
+            **safe_config
         )
         latency_ms = int((time.time() - start_time) * 1000)
 
