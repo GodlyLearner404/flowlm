@@ -1,6 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { runPlayground, getPromptVersions } from "./api";
 
+function formatLatency(latencyMs) {
+    if (latencyMs === null || latencyMs === undefined) return "n/a";
+    return `${Math.round(Number(latencyMs))} ms`;
+}
+
 function Playground() {
     const [versions, setVersions] = useState([]);
     const [selectedVersion, setSelectedVersion] = useState(null);
@@ -26,6 +31,11 @@ function Playground() {
 
     const handleSelect = (id) => {
         const v = versions.find((x) => x.id === id);
+        if (!v) {
+            setSelectedVersion(null);
+            setInputs({});
+            return;
+        }
         setSelectedVersion(v);
 
         // initialize inputs
@@ -63,11 +73,27 @@ function Playground() {
         <h2>Prompt Playground</h2>
 
         {/* 🔥 Select version */}
-        <select onChange={(e) => handleSelect(e.target.value)}>
-            <option>Select Prompt Version</option>
+        <select
+            value={selectedVersion?.id || ""}
+            onChange={(e) => {
+                handleSelect(e.target.value);
+                e.target.size = 1;
+                e.target.blur();
+            }}
+            onFocus={(e) => {
+                if (versions.length > 6) {
+                    e.target.size = 6;
+                }
+            }}
+            onBlur={(e) => {
+                e.target.size = 1;
+            }}
+            style={{ maxHeight: 220, overflowY: "auto" }}
+        >
+            <option value="">Select Prompt Version</option>
             {versions.map((v) => (
             <option key={v.id} value={v.id}>
-                {v.id}
+                v{v.version} / {v.model} / {v.id}
             </option>
             ))}
         </select>
@@ -93,6 +119,9 @@ function Playground() {
         {/* 🔥 Show template */}
         {selectedVersion && (
             <>
+            <p style={{ color: "#667085", marginTop: 12 }}>
+                Model: <strong style={{ color: "#18202a" }}>{selectedVersion.model}</strong>
+            </p>
             <h4>Template:</h4>
             <pre>{selectedVersion.template}</pre>
 
@@ -133,7 +162,7 @@ function Playground() {
                 )}
                 <p>Tokens: {r.tokens}</p>
                 <p>Finish Reason: {r.finish_reason || "n/a"}</p>
-                <p>Latency: {r.latency_ms != null ? `${r.latency_ms} ms` : "n/a"}</p>
+                <p>Latency: {formatLatency(r.latency_ms)}</p>
             </div>
         ))}
     </div>

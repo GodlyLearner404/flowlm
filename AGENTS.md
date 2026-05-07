@@ -74,3 +74,34 @@ A task is complete when:
 - Existing routes and workflows remain intact.
 - No unrelated changes were introduced.
 - The final response names what changed and how it was verified.
+
+## Incremental Change Policy
+
+AI coding agents must prefer:
+
+- small localized edits
+- one subsystem at a time
+- one feature slice at a time
+
+Avoid:
+
+- broad cross-project rewrites
+- touching many files unless necessary
+- reformatting unrelated code
+
+Prefer:
+
+- extending existing architecture
+- preserving APIs
+- preserving current UX patterns
+
+When possible:
+
+- modify one file per task
+- isolate backend and frontend changes separately
+
+Minimize token usage by:
+
+- avoiding unnecessary code regeneration
+- avoiding import reordering
+- avoiding duplicate rewrites
