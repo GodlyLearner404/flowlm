@@ -1,13 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { runPlayground, getPromptVersions } from "./api";
+import { runPlayground } from "./api";
 
 function formatLatency(latencyMs) {
     if (latencyMs === null || latencyMs === undefined) return "n/a";
     return `${Math.round(Number(latencyMs))} ms`;
 }
 
-function Playground() {
-    const [versions, setVersions] = useState([]);
+function Playground({ versions = [] }) {
     const [selectedVersion, setSelectedVersion] = useState(null);
     const [inputs, setInputs] = useState({});
     const [loading, setLoading] = useState(false);
@@ -15,13 +14,12 @@ function Playground() {
     const [results, setResults] = useState([]);
 
     useEffect(() => {
-        loadVersions();
-    }, []);
-
-    const loadVersions = async () => {
-        const res = await getPromptVersions();
-        setVersions(res.data);
-    };
+        if (selectedVersion && !versions.some((version) => version.id === selectedVersion.id)) {
+            setSelectedVersion(null);
+            setInputs({});
+            setResults([]);
+        }
+    }, [selectedVersion, versions]);
 
     const modelOptions = [
         "tencent/hy3-preview:free",

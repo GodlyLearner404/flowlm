@@ -1,8 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
+import DashboardLayout from "./components/Layout/DashboardLayout";
+import AnalyticsPage from "./components/pages/AnalyticsPage";
+import DashboardPage from "./components/pages/DashboardPage";
+import DatasetsPage from "./components/pages/DatasetsPage";
+import DeploymentsPage from "./components/pages/DeploymentsPage";
+import ExperimentsPage from "./components/pages/ExperimentsPage";
+import PlaygroundPage from "./components/pages/PlaygroundPage";
+import PromptsPage from "./components/pages/PromptsPage";
+import MetricCard from "./components/UI/MetricCard";
 import Login from "./Login";
 import ObservabilityDashboard from "./ObservabilityDashboard";
-import Playground from "./Playground";
 import {
   addDatasetItem,
   createDataset,
@@ -10,11 +18,12 @@ import {
   createPromptVersion,
   getDatasets,
   getExperiments,
+  getProjects,
   getPrompts,
   getRuns,
+  getStatus,
   getStoredToken,
   getSummary,
-  getStatus,
   runExperiment
 } from "./api";
 
@@ -22,6 +31,7 @@ const defaultPromptTemplate = "Explain {topic} in two clear sentences.";
 const defaultInputJson = '{\n  "topic": "Opportunity Cost (Economics)"\n}';
 const defaultExpected =
   "The value of the next best alternative that you give up when you make a specific choice.";
+const activeProjectStorageKey = "activeProjectId";
 
 function parseJson(value, fallback) {
   try {
@@ -46,13 +56,110 @@ function truncate(value, limit = 300) {
   return value.length > limit ? `${value.slice(0, limit)}...` : value;
 }
 
-function getErrorMessage(error, fallback) {
-  return error.response?.data?.detail || fallback;
+function formatErrorDetail(detail, fallback) {
+  if (!detail) return fallback;
+
+  if (typeof detail === "string") {
+    return detail;
+  }
+
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (!item || typeof item !== "object") return null;
+
+        const location = Array.isArray(item.loc) ? item.loc.join(" > ") : item.loc;
+        const message = item.msg || item.message;
+
+        if (location && message) {
+          return `${location}: ${message}`;
+        }
+
+        return message || null;
+      })
+      .filter(Boolean);
+
+    return messages.length ? messages.join("; ") : fallback;
+  }
+
+  if (typeof detail === "object") {
+    return detail.msg || detail.message || fallback;
+  }
+
+  return fallback;
 }
+
+function getErrorMessage(error, fallback) {
+  return formatErrorDetail(error.response?.data?.detail, fallback);
+}
+
+const navigationItems = [
+  { id: "workbench", label: "Dashboard", subtitle: "Overview" },
+  { id: "projects", label: "Projects", subtitle: "Coming soon" },
+  { id: "prompts", label: "Prompts", subtitle: "Versions" },
+  { id: "datasets", label: "Datasets", subtitle: "Benchmarks" },
+  { id: "experiments", label: "Experiments", subtitle: "Execution" },
+  { id: "deployments", label: "Deployments", subtitle: "Release ops" },
+  { id: "observability", label: "Analytics", subtitle: "Insights" },
+  { id: "evaluations", label: "Evaluations", subtitle: "Coming soon" },
+  { id: "playground", label: "Playground", subtitle: "Testing" },
+  { id: "api-keys", label: "API Keys", subtitle: "Coming soon" },
+  { id: "settings", label: "Settings", subtitle: "Coming soon" }
+];
+
+const viewMeta = {
+  workbench: {
+    title: "Dashboard",
+    subtitle: "Operational overview across prompt systems, experiments, and release readiness"
+  },
+  projects: {
+    title: "Projects",
+    subtitle: "Organize product workspaces and delivery streams"
+  },
+  prompts: {
+    title: "Prompts",
+    subtitle: "Create prompt definitions and manage versioned templates"
+  },
+  datasets: {
+    title: "Datasets",
+    subtitle: "Build evaluation datasets and add benchmark items"
+  },
+  experiments: {
+    title: "Experiments",
+    subtitle: "Launch evaluations and monitor execution readiness"
+  },
+  deployments: {
+    title: "Deployments",
+    subtitle: "Monitor release status and environment health"
+  },
+  observability: {
+    title: "Analytics",
+    subtitle: "Compare performance, latency, and experiment outcomes"
+  },
+  evaluations: {
+    title: "Evaluations",
+    subtitle: "Review benchmark coverage and scoring quality"
+  },
+  playground: {
+    title: "Playground",
+    subtitle: "Run prompt versions across models in one workspace"
+  },
+  "api-keys": {
+    title: "API Keys",
+    subtitle: "Manage credentials and environment access"
+  },
+  settings: {
+    title: "Settings",
+    subtitle: "Adjust workspace defaults and team preferences"
+  }
+};
 
 function App() {
   const [activeView, setActiveView] = useState("workbench");
   const [token, setToken] = useState(() => getStoredToken());
+  const [projects, setProjects] = useState([]);
+  const [activeProjectId, setActiveProjectId] = useState(() => localStorage.getItem(activeProjectStorageKey) || "");
   const [prompts, setPrompts] = useState([]);
   const [datasets, setDatasets] = useState([]);
   const [experiments, setExperiments] = useState([]);
@@ -87,16 +194,45 @@ function App() {
     localStorage.removeItem("token");
   }, [token]);
 
+  useEffect(() => {
+    if (activeProjectId) {
+      localStorage.setItem(activeProjectStorageKey, activeProjectId);
+      return;
+    }
+
+    localStorage.removeItem(activeProjectStorageKey);
+  }, [activeProjectId]);
+
+  const filteredPrompts = useMemo(
+    () => prompts.filter((prompt) => !activeProjectId || prompt.project_id === activeProjectId),
+    [activeProjectId, prompts]
+  );
+  const filteredDatasets = useMemo(
+    () => datasets.filter((dataset) => !activeProjectId || dataset.project_id === activeProjectId),
+    [activeProjectId, datasets]
+  );
   const promptVersions = useMemo(
-    () => prompts.flatMap((prompt) => prompt.versions.map((version) => ({
+    () => filteredPrompts.flatMap((prompt) => prompt.versions.map((version) => ({
       ...version,
-      prompt_name: prompt.name
+      prompt_name: prompt.name,
+      project_id: prompt.project_id
     }))),
-    [prompts]
+    [filteredPrompts]
   );
   const promptVersionMap = useMemo(
     () => Object.fromEntries(promptVersions.map((version) => [version.id, version])),
     [promptVersions]
+  );
+  const filteredExperiments = useMemo(
+    () => experiments.filter((experiment) => {
+      if (!activeProjectId) return true;
+      const winnerVersionId = experiment.winner?.prompt_version_id;
+
+      if (!winnerVersionId) return false;
+
+      return promptVersionMap[winnerVersionId]?.project_id === activeProjectId;
+    }),
+    [activeProjectId, experiments, promptVersionMap]
   );
   const selectedPromptVersion = selectedPromptVersionId ? promptVersionMap[selectedPromptVersionId] : null;
   const averageLatencyMs = useMemo(() => {
@@ -112,6 +248,110 @@ function App() {
     const promptVersionId = summary?.versions?.length === 1 ? summary.versions[0].prompt_version_id : null;
     return promptVersionId ? promptVersionMap[promptVersionId]?.model : null;
   }, [promptVersionMap, summary]);
+  const recentExperiments = useMemo(
+    () => filteredExperiments.slice(0, 6).map((experiment) => ({
+      ...experiment,
+      avg_latency_ms: experiment.experiment_id === selectedExperimentId ? averageLatencyMs : null
+    })),
+    [averageLatencyMs, filteredExperiments, selectedExperimentId]
+  );
+  const totalRuns = useMemo(
+    () => filteredExperiments.reduce((total, experiment) => total + (experiment.num_runs || 0), 0),
+    [filteredExperiments]
+  );
+  const tokenUsage = useMemo(
+    () => runs.reduce((total, run) => total + (Number(run.extra_data?.tokens_used || run.extra_data?.tokens || 0) || 0), 0),
+    [runs]
+  );
+  const deploymentOverview = useMemo(
+    () => ({
+      productionCount: 0,
+      stagingCount: 0,
+      deployedVersionCount: promptVersions.length ? Math.min(promptVersions.length, 3) : 0
+    }),
+    [promptVersions.length]
+  );
+  const activityItems = useMemo(() => {
+    const items = [];
+
+    if (filteredExperiments[0]) {
+      items.push({
+        type: "experiment",
+        title: "Experiment benchmark updated",
+        meta: filteredExperiments[0].winner?.prompt_version_id ? "Experiment" : "Run queue",
+        description: `Latest experiment ${filteredExperiments[0].experiment_id.slice(0, 8)} is tracking ${filteredExperiments[0].num_runs || 0} runs.`
+      });
+    }
+
+    if (selectedPromptVersion) {
+      items.push({
+        type: "prompt",
+        title: "Prompt version active",
+        meta: selectedPromptVersion.model,
+        description: `Version v${selectedPromptVersion.version} is available for testing and evaluation in the active workspace.`
+      });
+    }
+
+    if (filteredDatasets[0]) {
+      items.push({
+        type: "dataset",
+        title: "Dataset ready for evaluation",
+        meta: `${filteredDatasets[0].items.length} items`,
+        description: `${filteredDatasets[0].name} can be used for experiment runs and future evaluator workflows.`
+      });
+    }
+
+    items.push({
+      type: "deployment",
+      title: "Deployment control plane online",
+      meta: deploymentOverview.productionCount ? "Live environments" : "Environment visibility",
+      description: deploymentOverview.productionCount
+        ? "Production deployment signals are visible in the dashboard alongside staging readiness."
+        : "Production and staging surfaces now have dedicated operational UI while preserving existing deployment wiring."
+    });
+
+    return items.slice(0, 4);
+  }, [deploymentOverview.productionCount, filteredDatasets, filteredExperiments, selectedPromptVersion]);
+  const modelUsage = useMemo(() => {
+    const usageMap = new Map();
+
+    promptVersions.forEach((version) => {
+      const current = usageMap.get(version.model) || {
+        model: version.model,
+        versionCount: 0,
+        experimentCount: 0
+      };
+      current.versionCount += 1;
+      usageMap.set(version.model, current);
+    });
+
+    filteredExperiments.forEach((experiment) => {
+      const model = promptVersionMap[experiment.winner?.prompt_version_id]?.model;
+      if (!model) return;
+
+      const current = usageMap.get(model) || {
+        model,
+        versionCount: 0,
+        experimentCount: 0
+      };
+      current.experimentCount += 1;
+      usageMap.set(model, current);
+    });
+
+    const values = Array.from(usageMap.values())
+      .map((item) => {
+        const total = item.versionCount + item.experimentCount;
+        return {
+          model: item.model,
+          total,
+          coverage: Math.min(total * 20, 100),
+          subtitle: `${item.versionCount} versions / ${item.experimentCount} experiments`
+        };
+      })
+      .sort((a, b) => b.total - a.total);
+
+    return values.slice(0, 5);
+  }, [filteredExperiments, promptVersionMap, promptVersions]);
 
   const handleApiError = useCallback((error, fallback) => {
     if (error.response?.status === 401) {
@@ -127,7 +367,8 @@ function App() {
     if (!token) return;
 
     try {
-      const [promptRes, datasetRes, experimentRes] = await Promise.all([
+      const [projectRes, promptRes, datasetRes, experimentRes] = await Promise.all([
+        getProjects(),
         getPrompts(),
         getDatasets(),
         getExperiments()
@@ -137,30 +378,21 @@ function App() {
         (a, b) => (b.avg_score || 0) - (a.avg_score || 0)
       );
 
+      setProjects(projectRes.data);
       setPrompts(promptRes.data);
       setDatasets(datasetRes.data);
       setExperiments(sortedExperiments);
 
-      const firstPrompt = promptRes.data[0];
-      const firstVersion = promptRes.data.flatMap((prompt) => prompt.versions)[0];
-      const firstDataset = datasetRes.data[0];
-      const firstExperiment = sortedExperiments[0];
+      const hasActiveProject = projectRes.data.some((project) => project.id === activeProjectId);
+      const nextProjectId = hasActiveProject ? activeProjectId : projectRes.data[0]?.id || "";
 
-      if (!selectedPromptId && firstPrompt) setSelectedPromptId(firstPrompt.id);
-      if (!selectedPromptVersionId && firstVersion) setSelectedPromptVersionId(firstVersion.id);
-      if (!selectedDatasetId && firstDataset) setSelectedDatasetId(firstDataset.id);
-      if (!selectedExperimentId && firstExperiment) setSelectedExperimentId(firstExperiment.experiment_id);
+      if (nextProjectId !== activeProjectId) {
+        setActiveProjectId(nextProjectId);
+      }
     } catch (error) {
       handleApiError(error, "Could not load dashboard data.");
     }
-  }, [
-    handleApiError,
-    selectedDatasetId,
-    selectedExperimentId,
-    selectedPromptId,
-    selectedPromptVersionId,
-    token
-  ]);
+  }, [activeProjectId, handleApiError, token]);
 
   const loadRuns = useCallback(async (experimentId) => {
     try {
@@ -190,6 +422,33 @@ function App() {
       .catch((error) => handleApiError(error, "Could not load experiment status."));
   }, [handleApiError, loadRuns, selectedExperimentId]);
 
+  useEffect(() => {
+    if (!filteredPrompts.some((prompt) => prompt.id === selectedPromptId)) {
+      setSelectedPromptId(filteredPrompts[0]?.id || "");
+    }
+  }, [filteredPrompts, selectedPromptId]);
+
+  useEffect(() => {
+    if (!promptVersions.some((version) => version.id === selectedPromptVersionId)) {
+      setSelectedPromptVersionId(promptVersions[0]?.id || "");
+    }
+  }, [promptVersions, selectedPromptVersionId]);
+
+  useEffect(() => {
+    if (!filteredDatasets.some((dataset) => dataset.id === selectedDatasetId)) {
+      setSelectedDatasetId(filteredDatasets[0]?.id || "");
+    }
+  }, [filteredDatasets, selectedDatasetId]);
+
+  useEffect(() => {
+    if (!filteredExperiments.some((experiment) => experiment.experiment_id === selectedExperimentId)) {
+      setSelectedExperimentId(filteredExperiments[0]?.experiment_id || "");
+      setRuns([]);
+      setSummary(null);
+      setStatus(null);
+    }
+  }, [filteredExperiments, selectedExperimentId]);
+
   useEffect(() => () => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
@@ -198,6 +457,11 @@ function App() {
 
   const handleCreatePrompt = async (event) => {
     event.preventDefault();
+    if (!activeProjectId) {
+      setMessage("Select a project first.");
+      return;
+    }
+
     setLoading(true);
     setMessage("");
 
@@ -244,6 +508,11 @@ function App() {
 
   const handleCreateDataset = async (event) => {
     event.preventDefault();
+    if (!activeProjectId) {
+      setMessage("Select a project first.");
+      return;
+    }
+
     setLoading(true);
     setMessage("");
 
@@ -263,8 +532,7 @@ function App() {
     }
   };
 
-  const handleAddItem = async (event) => {
-    event.preventDefault();
+  const handleAddItem = async () => {
     if (!selectedDatasetId) {
       setMessage("Create or select a dataset first.");
       return;
@@ -296,6 +564,11 @@ function App() {
   const handleRunExperiment = async () => {
     if (!selectedPromptVersionId || !selectedDatasetId) {
       setMessage("Select a prompt version and dataset first.");
+      return;
+    }
+
+    if (!activeProjectId) {
+      setMessage("Select a project first.");
       return;
     }
 
@@ -341,7 +614,56 @@ function App() {
     }, 2000);
   };
 
-  const maxScore = Math.max(...experiments.map((exp) => exp.avg_score || 0), 1);
+  const maxScore = Math.max(...filteredExperiments.map((exp) => exp.avg_score || 0), 1);
+  const currentViewMeta = viewMeta[activeView] || viewMeta.workbench;
+  const dashboardMetrics = [
+    {
+      title: "Prompts",
+      value: filteredPrompts.length,
+      subtitle: selectedPromptVersion ? `Active model: ${selectedPromptVersion.model}` : "No prompt version selected"
+    },
+    {
+      title: "Datasets",
+      value: filteredDatasets.length,
+      subtitle: selectedDatasetId ? "Dataset ready for evaluation" : "Select or create a dataset"
+    },
+    {
+      title: "Experiments",
+      value: filteredExperiments.length,
+      subtitle: status?.status ? `Latest status: ${status.status}` : "No active experiment"
+    }
+  ];
+  const operationalMetrics = [
+    {
+      title: "Total Runs",
+      value: totalRuns,
+      subtitle: filteredExperiments.length ? "Across visible experiments" : "No experiment runs yet",
+      eyebrow: "Monitoring volume",
+      detail: "Execution coverage"
+    },
+    {
+      title: "Average Latency",
+      value: formatLatency(averageLatencyMs),
+      subtitle: selectedExperimentId ? "Based on loaded experiment runs" : "Load an experiment for live latency",
+      eyebrow: "Performance telemetry",
+      detail: "Operational baseline"
+    },
+    {
+      title: "Token Usage",
+      value: tokenUsage || "n/a",
+      subtitle: tokenUsage ? "Captured from loaded run metadata" : "Token totals unavailable in current sample",
+      eyebrow: "Cost signal",
+      detail: "Run metadata"
+    },
+    {
+      title: "Active Deployments",
+      value: deploymentOverview.productionCount,
+      subtitle: deploymentOverview.productionCount ? "Production deployments detected" : "Deployment API not yet surfaced",
+      tone: deploymentOverview.productionCount ? "good" : "warn",
+      eyebrow: deploymentOverview.productionCount ? "Production online" : "Production pending",
+      detail: "Release operations"
+    }
+  ];
 
   const handleLogin = (value) => {
     if (typeof value === "string") {
@@ -358,6 +680,8 @@ function App() {
   const handleLogout = () => {
     setActiveView("workbench");
     setToken("");
+    setProjects([]);
+    setActiveProjectId("");
     setPrompts([]);
     setDatasets([]);
     setExperiments([]);
@@ -382,6 +706,30 @@ function App() {
     }
   });
 
+  const projectSelectProps = getScrollableSelectProps(projects.length + 1);
+  const renderPlaceholderView = () => (
+    <>
+      <section className="metricGrid">
+        <MetricCard
+          title="Workspaces"
+          value={projects.length}
+          subtitle={activeProjectId ? "Project context is active" : "Select a project to begin"}
+        />
+        <MetricCard title="Connected Views" value="7" subtitle="Operational pages are now separated by workflow" />
+        <MetricCard title="Status" value="Planned" subtitle="This section is scaffolded for future product work" />
+      </section>
+      <section className="panel placeholderState">
+        <div className="panelHeader">
+          <h2>{currentViewMeta.title}</h2>
+        </div>
+        <p>
+          {currentViewMeta.subtitle}. The shell is ready here, and the existing FlowLM functionality remains available
+          in the dedicated operational pages.
+        </p>
+      </section>
+    </>
+  );
+
   if (!token) {
     return (
       <main
@@ -401,190 +749,142 @@ function App() {
   }
 
   return (
-    <main className="shell">
-      <header
-        className="topbar"
-        style={{
-          position: "sticky",
-          top: 0,
-          zIndex: 20,
-          background: "var(--bg)",
-          padding: "16px 0 12px",
-          marginBottom: 16,
-          borderBottom: "1px solid var(--line)"
-        }}
-      >
-        <div>
-          <p className="eyebrow">FlowLM workbench</p>
-          <h1 className="eyebrowbo">Prompt, dataset, and experiment control</h1>
-        </div>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-          <button
-            type="button"
-            className={activeView === "workbench" ? "primary" : ""}
-            onClick={() => setActiveView("workbench")}
-          >
-            Workbench
-          </button>
-          <button
-            type="button"
-            className={activeView === "observability" ? "primary" : ""}
-            onClick={() => setActiveView("observability")}
-          >
-            Observability
-          </button>
-          <button
-            type="button"
-            className={activeView === "playground" ? "primary" : ""}
-            onClick={() => setActiveView("playground")}
-          >
-            Playground
-          </button>
-          <button type="button" onClick={handleLogout}>Logout</button>
-        </div>
-      </header>
+    <DashboardLayout
+      navItems={navigationItems}
+      activeView={activeView}
+      onNavigate={setActiveView}
+      onLogout={handleLogout}
+      title={currentViewMeta.title}
+      subtitle={currentViewMeta.subtitle}
+      projects={projects}
+      activeProjectId={activeProjectId}
+      onProjectChange={setActiveProjectId}
+      projectSelectProps={projectSelectProps}
+      contentStyle={{ display: "grid", gap: 24 }}
+    >
+      <div className="shell">
+        {message && <div className="notice">{message}</div>}
 
-      {message && <div className="notice">{message}</div>}
+        {activeView === "workbench" && (
+          <DashboardPage
+            operationalMetrics={operationalMetrics}
+            recentExperiments={recentExperiments}
+            promptVersionMap={promptVersionMap}
+            formatScore={formatScore}
+            formatLatency={formatLatency}
+            deploymentOverview={deploymentOverview}
+            activityItems={activityItems}
+            dashboardMetrics={dashboardMetrics}
+            modelUsage={modelUsage}
+            onNavigate={setActiveView}
+          />
+        )}
 
-      {activeView === "workbench" && (
-        <>
-          <section className="grid">
-            <form className="panel" onSubmit={handleCreatePrompt}>
-              <div className="panelHeader">
-                <h2>Prompt editor</h2>
-                <button type="submit" disabled={loading}>Create prompt</button>
-              </div>
-              <label>Name<input value={promptName} onChange={(e) => setPromptName(e.target.value)} /></label>
-              <label>Description<input value={promptDescription} onChange={(e) => setPromptDescription(e.target.value)} /></label>
-              <div className="datasetSelect">
-                <span>Active prompt</span>
-                <select value={selectedPromptId} onChange={(e) => setSelectedPromptId(e.target.value)}>
-                  <option value="">Select prompt</option>
-                  {prompts.map((prompt) => (
-                    <option key={prompt.id} value={prompt.id}>{prompt.name}</option>
-                  ))}
-                </select>
-              </div>
-              <label>Template<textarea rows="5" value={promptTemplate} onChange={(e) => setPromptTemplate(e.target.value)} /></label>
-              <div className="split">
-                <label>Variables<input value={promptVariables} onChange={(e) => setPromptVariables(e.target.value)} /></label>
-                <label>Model<input value={promptModel} onChange={(e) => setPromptModel(e.target.value)} /></label>
-              </div>
-              <label>Config JSON<textarea rows="3" value={promptConfig} onChange={(e) => setPromptConfig(e.target.value)} /></label>
-              <button type="button" onClick={handleCreatePromptVersion} disabled={loading}>Create version</button>
-            </form>
+        {activeView === "prompts" && (
+          <PromptsPage
+            prompts={filteredPrompts}
+            promptVersions={promptVersions}
+            selectedPromptId={selectedPromptId}
+            setSelectedPromptId={setSelectedPromptId}
+            promptName={promptName}
+            setPromptName={setPromptName}
+            promptDescription={promptDescription}
+            setPromptDescription={setPromptDescription}
+            promptTemplate={promptTemplate}
+            setPromptTemplate={setPromptTemplate}
+            promptVariables={promptVariables}
+            setPromptVariables={setPromptVariables}
+            promptModel={promptModel}
+            setPromptModel={setPromptModel}
+            promptConfig={promptConfig}
+            setPromptConfig={setPromptConfig}
+            handleCreatePrompt={handleCreatePrompt}
+            handleCreatePromptVersion={handleCreatePromptVersion}
+            loading={loading}
+          />
+        )}
 
-            <form className="panel" onSubmit={handleCreateDataset}>
-              <div className="panelHeader">
-                <h2>Dataset editor</h2>
-                <button type="submit" disabled={loading}>Create dataset</button>
-              </div>
-              <label>Name<input value={datasetName} onChange={(e) => setDatasetName(e.target.value)} /></label>
-              <label>Description<input value={datasetDescription} onChange={(e) => setDatasetDescription(e.target.value)} /></label>
-              <div className="datasetSelect">
-                <span>Active dataset</span>
-                <select
-                  value={selectedDatasetId}
-                  onChange={(e) => {
-                    setSelectedDatasetId(e.target.value);
-                    e.target.size = 1;
-                    e.target.blur();
-                  }}
-                  {...getScrollableSelectProps(datasets.length + 1)}
-                >
-                  <option value="">Select dataset</option>
-                  {datasets.map((dataset) => (
-                    <option key={dataset.id} value={dataset.id}>{dataset.name}</option>
-                  ))}
-                </select>
-              </div>
-              <label>Item input JSON<textarea rows="5" value={itemInput} onChange={(e) => setItemInput(e.target.value)} /></label>
-              <label>Expected output<textarea rows="3" value={expectedOutput} onChange={(e) => setExpectedOutput(e.target.value)} /></label>
-              <button type="button" onClick={handleAddItem} disabled={loading}>Add item</button>
-            </form>
-          </section>
+        {activeView === "datasets" && (
+          <DatasetsPage
+            datasets={filteredDatasets}
+            selectedDatasetId={selectedDatasetId}
+            setSelectedDatasetId={setSelectedDatasetId}
+            datasetName={datasetName}
+            setDatasetName={setDatasetName}
+            datasetDescription={datasetDescription}
+            setDatasetDescription={setDatasetDescription}
+            itemInput={itemInput}
+            setItemInput={setItemInput}
+            expectedOutput={expectedOutput}
+            setExpectedOutput={setExpectedOutput}
+            handleCreateDataset={handleCreateDataset}
+            handleAddItem={handleAddItem}
+            getScrollableSelectProps={getScrollableSelectProps}
+            loading={loading}
+          />
+        )}
 
-          <section
-            className="controlBand"
-            style={{
-              position: "sticky",
-              top: 108,
-              zIndex: 15,
-              gap: 12,
-              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))"
-            }}
-          >
-            <label>
-              Prompt version
-              <select
-                value={selectedPromptVersionId}
-                onChange={(e) => {
-                  setSelectedPromptVersionId(e.target.value);
-                  e.target.size = 1;
-                  e.target.blur();
-                }}
-                {...getScrollableSelectProps(promptVersions.length + 1)}
-              >
-                <option value="">Select prompt version</option>
-                {promptVersions.map((version) => (
-                  <option key={version.id} value={version.id}>
-                    {version.prompt_name} / v{version.version} / {version.model}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Dataset
-              <select
-                value={selectedDatasetId}
-                onChange={(e) => {
-                  setSelectedDatasetId(e.target.value);
-                  e.target.size = 1;
-                  e.target.blur();
-                }}
-                {...getScrollableSelectProps(datasets.length + 1)}
-              >
-                <option value="">Select dataset</option>
-                {datasets.map((dataset) => (
-                  <option key={dataset.id} value={dataset.id}>
-                    {dataset.name} ({dataset.items.length} items)
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="statusBox">
-              <span>Status</span>
-              <strong>{status?.status || "idle"}</strong>
-              {selectedPromptVersion?.model && <small>{selectedPromptVersion.model}</small>}
-            </div>
-            <button className="primary" onClick={handleRunExperiment} disabled={loading}>
-              {loading ? "Working..." : "Run experiment"}
-            </button>
-          </section>
-        </>
-      )}
+        {activeView === "experiments" && (
+          <ExperimentsPage
+            filteredExperiments={filteredExperiments}
+            promptVersions={promptVersions}
+            filteredDatasets={filteredDatasets}
+            selectedPromptVersionId={selectedPromptVersionId}
+            setSelectedPromptVersionId={setSelectedPromptVersionId}
+            selectedDatasetId={selectedDatasetId}
+            setSelectedDatasetId={setSelectedDatasetId}
+            selectedPromptVersion={selectedPromptVersion}
+            status={status}
+            handleRunExperiment={handleRunExperiment}
+            loading={loading}
+            getScrollableSelectProps={getScrollableSelectProps}
+            formatScore={formatScore}
+            formatLatency={formatLatency}
+            averageLatencyMs={averageLatencyMs}
+          />
+        )}
 
-      {activeView === "observability" && (
-        <ObservabilityDashboard
-          experiments={experiments}
-          selectedExperimentId={selectedExperimentId}
-          setSelectedExperimentId={setSelectedExperimentId}
-          loadAll={loadAll}
-          maxScore={maxScore}
-          summary={summary}
-          promptVersionMap={promptVersionMap}
-          formatScore={formatScore}
-          formatLatency={formatLatency}
-          averageLatencyMs={averageLatencyMs}
-          loadRuns={loadRuns}
-          runs={runs}
-          singleVersionModel={singleVersionModel}
-          truncate={truncate}
-        />
-      )}
+        {activeView === "deployments" && (
+          <DeploymentsPage
+            deploymentOverview={deploymentOverview}
+            promptVersions={promptVersions}
+            onNavigate={setActiveView}
+          />
+        )}
 
-      {activeView === "playground" && <Playground />}
-    </main>
+        {activeView === "observability" && (
+          <AnalyticsPage
+            filteredExperiments={filteredExperiments}
+            averageLatencyMs={averageLatencyMs}
+            summary={summary}
+            formatScore={formatScore}
+            formatLatency={formatLatency}
+            observabilityDashboard={(
+              <ObservabilityDashboard
+                experiments={filteredExperiments}
+                selectedExperimentId={selectedExperimentId}
+                setSelectedExperimentId={setSelectedExperimentId}
+                loadAll={loadAll}
+                maxScore={maxScore}
+                summary={summary}
+                promptVersionMap={promptVersionMap}
+                formatScore={formatScore}
+                formatLatency={formatLatency}
+                averageLatencyMs={averageLatencyMs}
+                loadRuns={loadRuns}
+                runs={runs}
+                singleVersionModel={singleVersionModel}
+                truncate={truncate}
+              />
+            )}
+          />
+        )}
+
+        {activeView === "playground" && <PlaygroundPage versions={promptVersions} />}
+        {!["workbench", "prompts", "datasets", "experiments", "deployments", "observability", "playground"].includes(activeView) &&
+          renderPlaceholderView()}
+      </div>
+    </DashboardLayout>
   );
 }
 
